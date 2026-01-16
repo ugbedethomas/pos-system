@@ -1,4 +1,4 @@
-﻿# web_server.py
+# web_server.py
 from flask import Flask, render_template, jsonify, request, redirect, url_for, session
 from app.database import SessionLocal
 from app import crud, schemas, models
@@ -55,7 +55,7 @@ def force_init_db():
         from app.database import Base, engine
         from app import models
 
-        print("ðŸš€ FORCE Creating database tables...")
+        print("🚀 FORCE Creating database tables...")
 
         # Create all tables
         Base.metadata.create_all(bind=engine)
@@ -80,12 +80,12 @@ def force_init_db():
             )
             db.add(admin_user)
             db.commit()
-            print("âœ… Admin user created")
+            print("✅ Admin user created")
 
         db.close()
 
         return '''
-        <h1>âœ… SUCCESS! Database Initialized</h1>
+        <h1>✅ SUCCESS! Database Initialized</h1>
         <p>Database tables created successfully!</p>
         <p>Admin user created: admin/admin123</p>
         <p><a href="/login">Go to Login</a></p>
@@ -97,12 +97,12 @@ def force_init_db():
 def format_naira(amount):
     """Format amount as Nigerian Naira"""
     if amount is None:
-        return "â‚¦0.00"
+        return "₦0.00"
     try:
         amount = float(amount)
-        return f"â‚¦{amount:,.2f}"
+        return f"₦{amount:,.2f}"
     except (ValueError, TypeError):
-        return "â‚¦0.00"
+        return "₦0.00"
 
 
 def format_number(num):
@@ -123,7 +123,7 @@ COMPANY_SETTINGS = {
     "phone": "+234 812 345 6789",
     "email": "info@yourbusiness.com",
     "tax_id": "VAT-123456789",
-    "currency": "â‚¦",
+    "currency": "₦",
     "currency_code": "NGN",
     "tax_rate": 0.075,
     "receipt_footer": "Thank you for your patronage!\nGoods sold are not returnable",
@@ -216,30 +216,14 @@ def get_top_selling_products(db, limit=5):
         return []
 
 # Check if user is logged in
-# Check if user is logged in
 @app.before_request
 def require_login():
-    # Routes that don't require login
-    public_routes = [
-        'login', 
-        'setup_admin', 
-        'static', 
-        'health',
-        'initialize_database',
-        'force_init_db',
-        'create_tables_now'
-    ]
-    
-    # Also allow any route that starts with /force- or /init-
-    if request.endpoint in public_routes:
+    allowed_routes = ['login', 'setup_admin', 'static', 'health', 'initialize_database', 'create_tables_now']
+
+    if request.endpoint in allowed_routes:
         return
-    
-    if request.path.startswith('/force-') or request.path.startswith('/init-'):
-        return
-    
-    # Check for login
+
     if 'user_id' not in session:
-        return redirect('/login')
         return redirect('/login')
 
 
@@ -250,15 +234,15 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
 
-        print(f"\nðŸ” LOGIN ATTEMPT - Username: {username}")  # ADDED DEBUG
+        print(f"\n🔐 LOGIN ATTEMPT - Username: {username}")  # ADDED DEBUG
 
         db = SessionLocal()
         user = authenticate_user(db, username, password)
 
         if user:
             # ADDED DEBUG PRINTS
-            print(f"âœ… USER FOUND - ID: {user.id}, Username: {user.username}")
-            print(f"ðŸ“‹ USER DETAILS - Role: '{user.role}', Name: {user.full_name}")
+            print(f"✅ USER FOUND - ID: {user.id}, Username: {user.username}")
+            print(f"📋 USER DETAILS - Role: '{user.role}', Name: {user.full_name}")
 
             # Create session
             session['user_id'] = user.id
@@ -267,18 +251,18 @@ def login():
             session['full_name'] = user.full_name
 
             # DEBUG: Verify session was set
-            print(f"ðŸ’¾ SESSION SET - Role in session: '{session.get('role')}'")
+            print(f"💾 SESSION SET - Role in session: '{session.get('role')}'")
 
             # Update last login
             user.last_login = datetime.now()
             db.commit()
             db.close()
 
-            print(f"ðŸ”„ REDIRECTING to dashboard...\n")
+            print(f"🔄 REDIRECTING to dashboard...\n")
 
             return redirect('/')
         else:
-            print(f"âŒ AUTH FAILED - Invalid credentials for: {username}\n")
+            print(f"❌ AUTH FAILED - Invalid credentials for: {username}\n")
             db.close()
             return render_template('login.html', error='Invalid username or password')
 
@@ -312,10 +296,10 @@ def create_inventory_test_user():
         db.commit()
         db.close()
         return """
-        <h1>âœ… Inventory User Created!</h1>
+        <h1>✅ Inventory User Created!</h1>
         <p><strong>Username:</strong> inventory</p>
         <p><strong>Password:</strong> inventory123</p>
-        <p><strong>Role:</strong> inventory â† This matches your system</p>
+        <p><strong>Role:</strong> inventory ← This matches your system</p>
         <p><a href="/login">Go to Login</a></p>
         """
     except Exception as e:
@@ -1243,7 +1227,7 @@ def clear_all_sales():
 
         return jsonify({
             'success': True,
-            'message': f'âœ… Successfully cleared {total_rows} sales records!',
+            'message': f'✅ Successfully cleared {total_rows} sales records!',
             'cleared_tables': [t['name'] for t in cleared_tables],
             'rows_cleared': total_rows,
             'timestamp': datetime.now().isoformat(),
@@ -1311,7 +1295,7 @@ def backup_sales():
 
         return jsonify({
             'success': True,
-            'message': f'âœ… Backup created successfully!',
+            'message': f'✅ Backup created successfully!',
             'filename': backup_filename,
             'timestamp': datetime.now().isoformat(),
             'table_count': len(tables),
@@ -1778,179 +1762,13 @@ def setup_render():
         db.close()
 
         return f"""
-        <h1>âœ… Render Setup Complete</h1>
+        <h1>✅ Render Setup Complete</h1>
         <p>{admin_message}</p>
         <p>Database tables created successfully</p>
         <p><a href="/login">Go to Login</a></p>
         """
     except Exception as e:
         return f"<h1>Setup Error</h1><pre>{str(e)}</pre>"
-
-
-
-# ============================================
-# GUARANTEED Database Initialization
-# ============================================
-
-@app.route('/init-now')
-def init_now():
-    """GUARANTEED database initialization - NO LOGIN REQUIRED"""
-    try:
-        from app.database import Base, engine, SessionLocal
-        from app import models
-        from app.auth import get_password_hash
-        
-        response = []
-        
-        # 1. Create tables
-        response.append("1. Creating database tables...")
-        Base.metadata.create_all(bind=engine)
-        response.append("    Tables created!")
-        
-        # 2. Create admin user
-        db = SessionLocal()
-        from app.models import User
-        
-        # Admin
-        admin = db.query(User).filter(User.username == "admin").first()
-        if not admin:
-            admin_user = User(
-                username="admin",
-                email="admin@pos.com",
-                hashed_password=get_password_hash("admin123"),
-                role="admin",
-                full_name="Administrator",
-                is_active=True
-            )
-            db.add(admin_user)
-            response.append("2.  Admin created: admin/admin123")
-        else:
-            response.append("2.  Admin already exists")
-        
-        # Cashier
-        cashier = db.query(User).filter(User.username == "cashier").first()
-        if not cashier:
-            cashier_user = User(
-                username="cashier",
-                email="cashier@pos.com",
-                hashed_password=get_password_hash("cashier123"),
-                role="cashier",
-                full_name="Cashier",
-                is_active=True
-            )
-            db.add(cashier_user)
-            response.append("3.  Cashier created: cashier/cashier123")
-        
-        # Inventory
-        inventory = db.query(User).filter(User.username == "inventory").first()
-        if not inventory:
-            inventory_user = User(
-                username="inventory",
-                email="inventory@pos.com",
-                hashed_password=get_password_hash("inventory123"),
-                role="inventory",
-                full_name="Inventory Manager",
-                is_active=True
-            )
-            db.add(inventory_user)
-            response.append("4.  Inventory created: inventory/inventory123")
-        
-        db.commit()
-        db.close()
-        
-        # Return success page
-        html = '''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title> POS System Initialized</title>
-            <style>
-                body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
-                .success { color: green; font-size: 24px; margin-bottom: 20px; }
-                .step { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 5px; }
-                .login-btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; 
-                           text-decoration: none; border-radius: 5px; margin-top: 20px; }
-            </style>
-        </head>
-        <body>
-            <div class="success"> POS System Successfully Initialized!</div>
-        '''
-        
-        foreach ($step in $response) {
-            $html += "<div class='step'>$step</div>`n"
-        }
-        
-        $html += '''
-            <p>You can now login to your POS system.</p>
-            <a class="login-btn" href="/login">Go to Login</a>
-            </body>
-            </html>
-        '''
-        
-        return $html
-        
-    except Exception as e:
-        return f'''
-        <h1> Initialization Error</h1>
-        <pre>{str(e)}</pre>
-        <p>Please check Render logs for details.</p>
-        '''
-
-
-# ============================================
-# INIT NOW - Database initialization
-# ============================================
-
-@app.route('/init-now')
-def init_now():
-    """Initialize database - NO LOGIN REQUIRED"""
-    try:
-        from app.database import Base, engine, SessionLocal
-        from app import models
-        from app.auth import get_password_hash
-        
-        # Create tables
-        Base.metadata.create_all(bind=engine)
-        
-        # Create users
-        db = SessionLocal()
-        from app.models import User
-        
-        users_to_create = [
-            ("admin", "admin123", "admin"),
-            ("cashier", "cashier123", "cashier"), 
-            ("inventory", "inventory123", "inventory")
-        ]
-        
-        for username, password, role in users_to_create:
-            if not db.query(User).filter(User.username == username).first():
-                user = User(
-                    username=username,
-                    email=f"{username}@pos.com",
-                    hashed_password=get_password_hash(password),
-                    role=role,
-                    full_name=role.title(),
-                    is_active=True
-                )
-                db.add(user)
-        
-        db.commit()
-        db.close()
-        
-        return '''
-        <h1> Database Initialized!</h1>
-        <p>Tables created and users added.</p>
-        <p><strong>Login Credentials:</strong></p>
-        <ul>
-            <li>Admin: admin / admin123</li>
-            <li>Cashier: cashier / cashier123</li>
-            <li>Inventory: inventory / inventory123</li>
-        </ul>
-        <p><a href="/login">Click here to login</a></p>
-        '''
-        
-    except Exception as e:
-        return f"<h1>Error:</h1><pre>{str(e)}</pre>"
 
 
 if __name__ == '__main__':
@@ -1960,16 +1778,16 @@ if __name__ == '__main__':
     # Determine if we're in development or production
     debug_mode = os.environ.get('FLASK_ENV') != 'production'
 
-    print(f"ðŸš€ Starting POS System on port {port}")
-    print(f"ðŸ”§ Debug mode: {debug_mode}")
-    print(f"ðŸŒ Environment: {os.environ.get('FLASK_ENV', 'development')}")
+    print(f"🚀 Starting POS System on port {port}")
+    print(f"🔧 Debug mode: {debug_mode}")
+    print(f"🌍 Environment: {os.environ.get('FLASK_ENV', 'development')}")
 
     if os.environ.get('DATABASE_URL'):
-        print(f"ðŸ—„ï¸ Database: PostgreSQL (Render)")
+        print(f"🗄️ Database: PostgreSQL (Render)")
     else:
-        print(f"ðŸ—„ï¸ Database: SQLite (local)")
+        print(f"🗄️ Database: SQLite (local)")
 
-    print("\nðŸ“‹ Available URLs:")
+    print("\n📋 Available URLs:")
     print(f"   http://localhost:{port}/login")
     print(f"   http://localhost:{port}/setup-admin")
     print(f"   http://localhost:{port}/health")
@@ -1981,5 +1799,3 @@ if __name__ == '__main__':
         debug=debug_mode,
         threaded=True
     )
-
-
