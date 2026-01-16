@@ -1,8 +1,14 @@
-﻿Flask==2.3.3
+﻿Write-Host " COMPLETE FIX FOR RENDER DEPLOYMENT" -ForegroundColor Red -BackgroundColor White
+Write-Host "======================================" -ForegroundColor Cyan
+
+# 1. Update requirements.txt
+Write-Host "`n1. Updating requirements.txt..." -ForegroundColor Yellow
+@'
+Flask==2.3.3
 Werkzeug==2.3.7
 Jinja2==3.1.2
 MarkupSafe==2.1.3
-SQLAlchemy==2.0.23
+SQLAlchemy==1.4.50
 psycopg2-binary==2.9.9
 pyjwt==2.8.0
 cryptography==41.0.7
