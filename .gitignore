@@ -21,3 +21,12 @@ venv.bak/
 Thumbs.db
 *.tmp
 *.temp
+# Database
+*.db
+*.sqlite3
+pos.db
+
+# Virtual environment
+.venv/
+venv/
+env/
