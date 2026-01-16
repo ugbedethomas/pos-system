@@ -2,24 +2,17 @@
 from flask import Flask, render_template, jsonify, request, redirect, url_for, session
 from app.database import SessionLocal
 from app import crud, schemas, models
-from app.models import Sale, SaleItem, Product, Customer, User, StockMovement  # ADD THIS LINE
+from app.models import Sale, SaleItem, Product, Customer, User, StockMovement
 from datetime import datetime, timedelta
 import secrets
 from app.auth import authenticate_user, get_password_hash
 import json
-
-import json
 from markupsafe import Markup
-
 import sqlite3
-from datetime import datetime
 import os
-from datetime import timedelta
 
 app = Flask(__name__, template_folder="templates")
 app.secret_key = secrets.token_hex(32)
-
-
 
 
 def escapejs(value):
@@ -53,15 +46,14 @@ def force_init_db():
     """Initialize database WITHOUT login requirement"""
     try:
         from app.database import Base, engine
-        from app import models
+        from app.auth import get_password_hash
 
-        print("ðŸš€ FORCE Creating database tables...")
+        print("🚀 FORCE Creating database tables...")
 
         # Create all tables
         Base.metadata.create_all(bind=engine)
 
-        # Also create admin user
-        from app.auth import get_password_hash
+        # Create users
         from app.models import User
         from app.database import SessionLocal
 
@@ -79,13 +71,13 @@ def force_init_db():
                 is_active=True
             )
             db.add(admin_user)
-            db.commit()
-            print("âœ… Admin user created")
+            print("✅ Admin user created")
 
+        db.commit()
         db.close()
 
         return '''
-        <h1>âœ… SUCCESS! Database Initialized</h1>
+        <h1>✅ SUCCESS! Database Initialized</h1>
         <p>Database tables created successfully!</p>
         <p>Admin user created: admin/admin123</p>
         <p><a href="/login">Go to Login</a></p>
@@ -93,16 +85,17 @@ def force_init_db():
     except Exception as e:
         return f"<h1>Error:</h1><pre>{str(e)}</pre>"
 
-# Simple currency formatting function (since helpers might not exist yet)
+
+# Simple currency formatting function
 def format_naira(amount):
     """Format amount as Nigerian Naira"""
     if amount is None:
-        return "â‚¦0.00"
+        return "₦0.00"
     try:
         amount = float(amount)
-        return f"â‚¦{amount:,.2f}"
+        return f"₦{amount:,.2f}"
     except (ValueError, TypeError):
-        return "â‚¦0.00"
+        return "₦0.00"
 
 
 def format_number(num):
@@ -116,14 +109,14 @@ def format_number(num):
         return "0"
 
 
-# Default company settings (create settings.py file later)
+# Default company settings
 COMPANY_SETTINGS = {
     "name": "Your Business POS",
     "address": "123 Business Street, Lagos, Nigeria",
     "phone": "+234 812 345 6789",
     "email": "info@yourbusiness.com",
     "tax_id": "VAT-123456789",
-    "currency": "â‚¦",
+    "currency": "₦",
     "currency_code": "NGN",
     "tax_rate": 0.075,
     "receipt_footer": "Thank you for your patronage!\nGoods sold are not returnable",
@@ -174,9 +167,7 @@ def check_permission(required_role=None):
 def get_top_selling_products(db, limit=5):
     """Get top selling products by quantity sold"""
     try:
-        # Query to get top selling products
         from sqlalchemy import func
-
         result = db.query(
             models.Product.id,
             models.Product.name,
@@ -210,36 +201,36 @@ def get_top_selling_products(db, limit=5):
             })
 
         return top_products
-
     except Exception as e:
         print(f"Error getting top products: {e}")
         return []
 
-# Check if user is logged in
+
 # Check if user is logged in
 @app.before_request
 def require_login():
     # Routes that don't require login
     public_routes = [
-        'login', 
-        'setup_admin', 
-        'static', 
+        'login',
+        'setup_admin',
+        'static',
         'health',
         'initialize_database',
         'force_init_db',
-        'create_tables_now'
+        'init_now',  # Added this
+        'create_inventory_test_user'
     ]
-    
-    # Also allow any route that starts with /force- or /init-
+
+    # Check if the endpoint is in public routes
     if request.endpoint in public_routes:
         return
-    
+
+    # Check for paths that should be public
     if request.path.startswith('/force-') or request.path.startswith('/init-'):
         return
-    
+
     # Check for login
     if 'user_id' not in session:
-        return redirect('/login')
         return redirect('/login')
 
 
@@ -250,15 +241,14 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
 
-        print(f"\nðŸ” LOGIN ATTEMPT - Username: {username}")  # ADDED DEBUG
+        print(f"\n🔐 LOGIN ATTEMPT - Username: {username}")
 
         db = SessionLocal()
         user = authenticate_user(db, username, password)
 
         if user:
-            # ADDED DEBUG PRINTS
-            print(f"âœ… USER FOUND - ID: {user.id}, Username: {user.username}")
-            print(f"ðŸ“‹ USER DETAILS - Role: '{user.role}', Name: {user.full_name}")
+            print(f"✅ USER FOUND - ID: {user.id}, Username: {user.username}")
+            print(f"📋 USER DETAILS - Role: '{user.role}', Name: {user.full_name}")
 
             # Create session
             session['user_id'] = user.id
@@ -267,18 +257,17 @@ def login():
             session['full_name'] = user.full_name
 
             # DEBUG: Verify session was set
-            print(f"ðŸ’¾ SESSION SET - Role in session: '{session.get('role')}'")
+            print(f"💾 SESSION SET - Role in session: '{session.get('role')}'")
 
             # Update last login
             user.last_login = datetime.now()
             db.commit()
             db.close()
 
-            print(f"ðŸ”„ REDIRECTING to dashboard...\n")
-
+            print(f"🔄 REDIRECTING to dashboard...\n")
             return redirect('/')
         else:
-            print(f"âŒ AUTH FAILED - Invalid credentials for: {username}\n")
+            print(f"❌ AUTH FAILED - Invalid credentials for: {username}\n")
             db.close()
             return render_template('login.html', error='Invalid username or password')
 
@@ -288,39 +277,36 @@ def login():
 @app.route('/create-inventory-test-user')
 def create_inventory_test_user():
     db = SessionLocal()
-    from models import User
-
-    # Check if user already exists
-    existing = db.query(User).filter(User.username == 'inventory').first()
-
-    if existing:
-        db.close()
-        return f"User already exists: {existing.username} (Role: {existing.role})"
-
-    # Create new inventory manager WITH CORRECT FIELDS
-    new_user = User(
-        username='inventory',
-        full_name='Inventory Manager',
-        hashed_password='inventory123',  # CORRECT FIELD NAME
-        role='inventory',  # CORRECT ROLE - matches your User model comment
-        email='inventory@pos.com',
-        created_at=datetime.now()
-    )
-
     try:
+        # Check if user already exists
+        existing = db.query(models.User).filter(models.User.username == 'inventory').first()
+
+        if existing:
+            return f"User already exists: {existing.username} (Role: {existing.role})"
+
+        # Create new inventory manager
+        new_user = models.User(
+            username='inventory',
+            full_name='Inventory Manager',
+            hashed_password=get_password_hash('inventory123'),
+            role='inventory',
+            email='inventory@pos.com',
+            created_at=datetime.now()
+        )
+
         db.add(new_user)
         db.commit()
-        db.close()
         return """
-        <h1>âœ… Inventory User Created!</h1>
+        <h1>✅ Inventory User Created!</h1>
         <p><strong>Username:</strong> inventory</p>
         <p><strong>Password:</strong> inventory123</p>
-        <p><strong>Role:</strong> inventory â† This matches your system</p>
+        <p><strong>Role:</strong> inventory</p>
         <p><a href="/login">Go to Login</a></p>
         """
     except Exception as e:
-        db.close()
         return f"<h1>Error:</h1><p>{str(e)}</p>"
+    finally:
+        db.close()
 
 
 # Logout
@@ -334,7 +320,6 @@ def logout():
 @app.route('/setup-admin')
 def setup_admin():
     db = SessionLocal()
-
     try:
         # Check if admin exists
         admin = db.query(models.User).filter(models.User.role == 'admin').first()
@@ -387,8 +372,7 @@ def setup_admin():
         db.close()
 
 
-# Dashboard - FIXED: Now allows all logged-in users
-# Dashboard - FIXED: Now allows all logged-in users
+# Dashboard
 @app.route('/')
 def dashboard():
     # Allow ALL logged-in users: admin, cashier, inventory
@@ -396,7 +380,6 @@ def dashboard():
         return redirect('/login')
 
     db = SessionLocal()
-
     try:
         products = crud.get_products(db)
         customers = crud.get_customers(db)
@@ -409,7 +392,7 @@ def dashboard():
         low_stock = crud.get_low_stock_products(db)
         recent_sales = sorted(sales, key=lambda x: x.created_at, reverse=True)[:5]
 
-        # NEW: Get top selling products
+        # Get top selling products
         top_products = get_top_selling_products(db)
 
         return render_template('dashboard.html',
@@ -420,7 +403,7 @@ def dashboard():
                                low_stock_products=low_stock,
                                low_stock_count=len(low_stock),
                                recent_sales=recent_sales,
-                               top_products=top_products,  # NEW
+                               top_products=top_products,
                                company=COMPANY_SETTINGS,
                                payment_methods=PAYMENT_METHODS,
                                format_naira=format_naira,
@@ -437,7 +420,6 @@ def pos():
         return "Access Denied: Only cashiers and admin can access POS", 403
 
     db = SessionLocal()
-
     try:
         products = crud.get_products(db)
         categories = list(set(p.category for p in products if p.category))
@@ -461,7 +443,6 @@ def products():
         return "Access Denied: Only inventory officers and admin can manage products", 403
 
     db = SessionLocal()
-
     try:
         products = crud.get_products(db)
         return render_template('products.html',
@@ -480,7 +461,6 @@ def inventory():
         return "Access Denied: Only inventory officers and admin can view inventory", 403
 
     db = SessionLocal()
-
     try:
         products = crud.get_products(db)
         report = crud.get_inventory_report(db)
@@ -504,7 +484,6 @@ def sales_page():
         return "Access Denied: Only cashiers and admin can view sales", 403
 
     db = SessionLocal()
-
     try:
         sales_list = crud.get_sales(db)
 
@@ -536,7 +515,6 @@ def sales_page():
 @app.route('/api/products')
 def api_products():
     db = SessionLocal()
-
     try:
         products = crud.get_products(db)
         result = []
@@ -561,7 +539,6 @@ def api_create_product():
         return jsonify({'error': 'Access denied'}), 403
 
     db = SessionLocal()
-
     try:
         data = request.get_json()
 
@@ -590,7 +567,6 @@ def api_create_product():
             'category': product.category,
             'description': product.description
         })
-
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
     except Exception as e:
@@ -605,7 +581,6 @@ def web_create_product():
         return "Access Denied", 403
 
     db = SessionLocal()
-
     try:
         # Get form data
         name = request.form.get('name')
@@ -626,7 +601,6 @@ def web_create_product():
 
         product = crud.create_product(db, product_data)
         return redirect('/products?success=Product+added')
-
     except ValueError as e:
         return redirect(f'/products?error={str(e).replace(" ", "+")}')
     except Exception as e:
@@ -642,7 +616,6 @@ def edit_product(product_id):
         return "Access Denied", 403
 
     db = SessionLocal()
-
     try:
         if request.method == 'GET':
             # Get product for editing
@@ -653,7 +626,6 @@ def edit_product(product_id):
             return render_template('edit_product.html',
                                    product=product,
                                    format_naira=format_naira)
-
         else:  # POST - Update product
             # Get form data
             name = request.form.get('name')
@@ -689,7 +661,6 @@ def edit_product(product_id):
 
             db.commit()
             return redirect('/products?success=Product+updated')
-
     except Exception as e:
         db.rollback()
         return redirect(f'/products?error={str(e).replace(" ", "+")}')
@@ -703,7 +674,6 @@ def delete_product(product_id):
         return jsonify({'success': False, 'message': 'Access denied'}), 403
 
     db = SessionLocal()
-
     try:
         product = db.query(models.Product).filter(models.Product.id == product_id).first()
         if not product:
@@ -717,7 +687,6 @@ def delete_product(product_id):
         db.delete(product)
         db.commit()
         return jsonify({'success': True, 'message': 'Product deleted'})
-
     except Exception as e:
         db.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -725,10 +694,10 @@ def delete_product(product_id):
         db.close()
 
 
-# Cart Management Endpoints - UPDATED VERSION
+# Cart Management Endpoints
 @app.route('/api/cart/add', methods=['POST'])
 def api_add_to_cart():
-    """Add item to cart - IMPROVED VERSION"""
+    """Add item to cart"""
     if 'user_id' not in session:
         return jsonify({'success': False, 'message': 'Not authenticated'}), 401
 
@@ -790,7 +759,6 @@ def api_add_to_cart():
 
         session['cart'] = cart
         session.modified = True
-
         db.close()
 
         return jsonify({
@@ -800,7 +768,6 @@ def api_add_to_cart():
             'cart_total': sum(item['subtotal'] for item in cart),
             'cart_items': cart
         })
-
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -862,7 +829,7 @@ def api_remove_from_cart(product_id):
 # Complete Sale Endpoint
 @app.route('/sales/complete', methods=['POST'])
 def complete_sale():
-    """Complete the sale - FIXED for your current model"""
+    """Complete the sale"""
     if 'user_id' not in session:
         return jsonify({'success': False, 'message': 'Not authenticated'}), 401
 
@@ -870,7 +837,6 @@ def complete_sale():
         return jsonify({'success': False, 'message': 'Access denied'}), 403
 
     db = SessionLocal()
-
     try:
         data = request.get_json()
 
@@ -905,15 +871,15 @@ def complete_sale():
         today = datetime.now()
         receipt_number = f'REC-{today.strftime("%Y%m%d%H%M%S")}'
 
-        # Create sale - USING ONLY FIELDS YOUR MODEL HAS
+        # Create sale
         sale = models.Sale(
             receipt_number=receipt_number,
-            total_amount=total,  # Your model has this
-            tax_amount=tax,  # Your model has this
-            discount_amount=discount_amount,  # Your model has this
-            payment_method=payment_method,  # Your model has this
-            payment_status="completed",  # Your model has this
-            customer_id=customer_id  # Your model has this
+            total_amount=total,
+            tax_amount=tax,
+            discount_amount=discount_amount,
+            payment_method=payment_method,
+            payment_status="completed",
+            customer_id=customer_id
         )
 
         db.add(sale)
@@ -930,7 +896,7 @@ def complete_sale():
             )
             db.add(sale_item)
 
-            # Update product stock (simple update)
+            # Update product stock
             product = db.query(models.Product).filter(models.Product.id == item['product_id']).first()
             if product:
                 product.stock_quantity = max(0, product.stock_quantity - item['quantity'])
@@ -961,7 +927,6 @@ def complete_sale():
                 'items': cart
             }
         })
-
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
     finally:
@@ -974,7 +939,6 @@ def api_create_sale():
         return jsonify({'error': 'Access denied'}), 403
 
     db = SessionLocal()
-
     try:
         data = request.get_json()
 
@@ -1011,7 +975,6 @@ def api_inventory_report():
         return jsonify({'error': 'Access denied'}), 403
 
     db = SessionLocal()
-
     try:
         report = crud.get_inventory_report(db)
         return jsonify(report)
@@ -1025,17 +988,10 @@ def settings():
     if not check_permission('admin'):
         return "Access Denied: Only admin can access settings", 403
 
-    db = SessionLocal()
-
-    try:
-        # Get current company settings from database if you have it
-        # For now, use the default COMPANY_SETTINGS
-        return render_template('settings.html',
-                               company=COMPANY_SETTINGS,
-                               format_naira=format_naira
-                               )
-    finally:
-        db.close()
+    return render_template('settings.html',
+                           company=COMPANY_SETTINGS,
+                           format_naira=format_naira
+                           )
 
 
 @app.route('/api/sales/<receipt_number>')
@@ -1044,7 +1000,6 @@ def get_sale_by_receipt(receipt_number):
         return jsonify({'error': 'Not authenticated'}), 401
 
     db = SessionLocal()
-
     try:
         # Get sale
         sale = db.query(models.Sale).filter(models.Sale.receipt_number == receipt_number).first()
@@ -1073,7 +1028,6 @@ def get_sale_by_receipt(receipt_number):
             'created_at': sale.created_at.isoformat(),
             'items': items
         })
-
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
@@ -1089,7 +1043,7 @@ def update_settings():
     try:
         data = request.get_json()
 
-        # Update COMPANY_SETTINGS (in production, save to database)
+        # Update COMPANY_SETTINGS
         if 'name' in data:
             COMPANY_SETTINGS['name'] = data['name']
         if 'address' in data:
@@ -1107,15 +1061,11 @@ def update_settings():
         if 'bank_details' in data:
             COMPANY_SETTINGS['bank_details'] = data['bank_details']
 
-        # In a real app, save to database
-        # For now, we'll just update the global variable
-
         return jsonify({
             'success': True,
             'message': 'Settings updated successfully',
             'settings': COMPANY_SETTINGS
         })
-
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -1136,8 +1086,7 @@ def debug_users():
         return "Admin access required"
 
     db = SessionLocal()
-    from models import User
-    users = db.query(User).all()
+    users = db.query(models.User).all()
     db.close()
 
     result = "<h1>All Users</h1>"
@@ -1146,14 +1095,11 @@ def debug_users():
     return result
 
 
-# Add this import at the top if not already there
-# Add these routes to your web_server.py file:
-
+# Sales data management
 @app.route('/api/sales/clear-all', methods=['POST'])
 def clear_all_sales():
     """Clear all sales data from database"""
     try:
-        # Get confirmation from request
         data = request.get_json()
 
         if not data or not data.get('confirmed'):
@@ -1168,12 +1114,10 @@ def clear_all_sales():
 
         print(f"[{datetime.now()}] Starting to clear sales data...")
 
-        # First, let's see what tables we have
+        # Get sales-related tables
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = [table[0] for table in cursor.fetchall()]
-        print(f"Found tables: {tables}")
 
-        # Try to clear sales-related tables
         sales_tables = []
         sales_keywords = ['sale', 'transaction', 'receipt', 'order']
 
@@ -1182,17 +1126,13 @@ def clear_all_sales():
             if any(keyword in table_lower for keyword in sales_keywords):
                 sales_tables.append(table)
 
-        print(f"Sales-related tables: {sales_tables}")
-
         # Clear each sales table
         cleared_tables = []
         for table in sales_tables:
             try:
-                # Count rows before deletion
                 cursor.execute(f'SELECT COUNT(*) FROM "{table}"')
                 count_before = cursor.fetchone()[0]
 
-                # Delete rows
                 cursor.execute(f'DELETE FROM "{table}"')
                 cleared_tables.append({
                     'name': table,
@@ -1202,54 +1142,20 @@ def clear_all_sales():
             except Exception as e:
                 print(f"Error clearing table {table}: {e}")
 
-        # Also try to clear common table names if not already cleared
-        common_tables = ['sales', 'sale_items', 'transactions', 'receipts', 'orders', 'order_items']
-        for table in common_tables:
-            # Check if table exists and hasn't been cleared yet
-            if table in tables and not any(t['name'] == table for t in cleared_tables):
-                try:
-                    cursor.execute(f'SELECT COUNT(*) FROM "{table}"')
-                    count_before = cursor.fetchone()[0]
-
-                    cursor.execute(f'DELETE FROM "{table}"')
-                    cleared_tables.append({
-                        'name': table,
-                        'rows_cleared': count_before
-                    })
-                    print(f"Cleared table: {table} ({count_before} rows)")
-                except Exception as e:
-                    print(f"Error clearing table {table}: {e}")
-
-        conn.commit()
-
-        # Reset auto-increment counters for cleared tables
-        for table_info in cleared_tables:
-            table = table_info['name']
-            try:
-                cursor.execute(f'DELETE FROM sqlite_sequence WHERE name="{table}"')
-                print(f"Reset auto-increment for: {table}")
-            except:
-                pass
-
         conn.commit()
         conn.close()
 
         # Calculate total rows cleared
         total_rows = sum(t['rows_cleared'] for t in cleared_tables)
 
-        # Log the action
-        current_user = session.get('username', 'admin') if hasattr(session, 'get') else 'admin'
-        print(f"[{datetime.now()}] User '{current_user}' cleared {total_rows} rows from {len(cleared_tables)} tables")
-
         return jsonify({
             'success': True,
-            'message': f'âœ… Successfully cleared {total_rows} sales records!',
+            'message': f'✅ Successfully cleared {total_rows} sales records!',
             'cleared_tables': [t['name'] for t in cleared_tables],
             'rows_cleared': total_rows,
             'timestamp': datetime.now().isoformat(),
-            'cleared_by': current_user
+            'cleared_by': session.get('username', 'admin')
         })
-
     except Exception as e:
         print(f"Error clearing sales data: {str(e)}")
         return jsonify({
@@ -1262,41 +1168,28 @@ def clear_all_sales():
 def backup_sales():
     """Create a backup of sales data"""
     try:
+        import json
+        from datetime import datetime
+
         conn = sqlite3.connect('pos.db')
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # Get all non-system tables
+        # Get all tables
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
         tables = [row[0] for row in cursor.fetchall()]
 
-        print(f"Backing up tables: {tables}")
-
-        # Create backup data structure
+        # Create backup data
         backup_data = {
             'timestamp': datetime.now().isoformat(),
-            'database': 'pos.db',
             'tables': {}
         }
 
         # Backup each table
-        total_rows = 0
         for table in tables:
-            try:
-                cursor.execute(f'SELECT * FROM "{table}"')
-                rows = cursor.fetchall()
-                # Convert rows to dictionaries
-                table_data = []
-                for row in rows:
-                    table_data.append(dict(row))
-
-                backup_data['tables'][table] = table_data
-                row_count = len(table_data)
-                total_rows += row_count
-                print(f"Backed up table: {table} ({row_count} rows)")
-            except Exception as e:
-                print(f"Error backing up table {table}: {e}")
-                backup_data['tables'][table] = []
+            cursor.execute(f'SELECT * FROM "{table}"')
+            rows = cursor.fetchall()
+            backup_data['tables'][table] = [dict(row) for row in rows]
 
         conn.close()
 
@@ -1305,84 +1198,25 @@ def backup_sales():
         backup_filename = f'sales_backup_{timestamp}.json'
 
         with open(backup_filename, 'w') as f:
-            json.dump(backup_data, f, indent=2, default=str)
-
-        print(f"Backup saved to: {backup_filename}")
+            json.dump(backup_data, f, indent=2)
 
         return jsonify({
             'success': True,
-            'message': f'âœ… Backup created successfully!',
+            'message': f'Backup created: {backup_filename}',
             'filename': backup_filename,
-            'timestamp': datetime.now().isoformat(),
-            'table_count': len(tables),
-            'row_count': total_rows
+            'row_count': sum(len(rows) for rows in backup_data['tables'].values())
         })
-
     except Exception as e:
-        print(f"Error creating backup: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'Backup failed: {str(e)}'
         }), 500
 
-    @app.route('/api/sales/backup', methods=['POST'])
-    def backup_sales():
-        """Create a backup of sales data"""
-        try:
-            import json
-            from datetime import datetime
 
-            conn = sqlite3.connect('pos.db')
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-
-            # Get all tables
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
-            tables = [row[0] for row in cursor.fetchall()]
-
-            # Create backup data
-            backup_data = {
-                'timestamp': datetime.now().isoformat(),
-                'tables': {}
-            }
-
-            # Backup each table
-            for table in tables:
-                cursor.execute(f'SELECT * FROM "{table}"')
-                rows = cursor.fetchall()
-                backup_data['tables'][table] = [dict(row) for row in rows]
-
-            conn.close()
-
-            # Save to file
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            backup_filename = f'sales_backup_{timestamp}.json'
-
-            with open(backup_filename, 'w') as f:
-                json.dump(backup_data, f, indent=2)
-
-            return jsonify({
-                'success': True,
-                'message': f'Backup created: {backup_filename}',
-                'filename': backup_filename,
-                'row_count': sum(len(rows) for rows in backup_data['tables'].values())
-            })
-
-        except Exception as e:
-            return jsonify({
-                'success': False,
-                'message': f'Backup failed: {str(e)}'
-            }), 500
-
-
-from datetime import datetime
-
-
-# Update your print_receipt function in web_server.py:
-
+# Receipt printing
 @app.route('/receipt/<int:sale_id>/print')
 def print_receipt(sale_id):
-    """Print receipt for a specific sale - FINAL FIXED VERSION"""
+    """Print receipt for a specific sale"""
     if not check_permission('cashier'):
         return "Access Denied", 403
 
@@ -1391,10 +1225,7 @@ def print_receipt(sale_id):
     import traceback
 
     db = SessionLocal()
-
     try:
-        print(f"DEBUG: Getting sale {sale_id}")
-
         # Get sale with all relationships
         sale = db.query(models.Sale).options(
             joinedload(models.Sale.customer),
@@ -1414,11 +1245,11 @@ def print_receipt(sale_id):
                 'total': float(item.quantity * item.unit_price)
             })
 
-        # Create receipt data - USE 'receipt_items' INSTEAD OF 'items'
+        # Create receipt data
         receipt_data = {
             'receipt_number': sale.receipt_number or f"REC-{sale.id:06d}",
             'created_at': sale.created_at.strftime('%Y-%m-%d %H:%M:%S') if sale.created_at else 'N/A',
-            'receipt_items': items_list,  # CHANGED: 'receipt_items' not 'items'
+            'receipt_items': items_list,
             'subtotal': float(sale.total_amount - (sale.tax_amount or 0)),
             'tax_amount': float(sale.tax_amount or 0),
             'discount_amount': float(sale.discount_amount or 0),
@@ -1429,19 +1260,14 @@ def print_receipt(sale_id):
             'customer': sale.customer.name if sale.customer else 'Walk-in Customer'
         }
 
-        # Get company info
-        company_info = COMPANY_SETTINGS
-
         return render_template('receipt_print.html',
                                receipt=receipt_data,
-                               company=company_info,
+                               company=COMPANY_SETTINGS,
                                format_naira=format_naira)
-
     except Exception as e:
         error_msg = f"Error: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
         print(error_msg)
         return f"<pre>{error_msg}</pre>", 500
-
     finally:
         db.close()
 
@@ -1453,13 +1279,12 @@ def get_sale_details(sale_id):
         return jsonify({'error': 'Access denied'}), 403
 
     db = SessionLocal()
-
     try:
         sale = crud.get_sale(db, sale_id)
         if not sale:
             return jsonify({'error': 'Sale not found'}), 404
 
-        # Get sale items with product info - FIXED: Use models.SaleItem
+        # Get sale items with product info
         from sqlalchemy.orm import joinedload
         sale_items = db.query(models.SaleItem).options(
             joinedload(models.SaleItem.product)
@@ -1494,232 +1319,100 @@ def get_sale_details(sale_id):
         }
 
         return jsonify(sale_data)
-
     except Exception as e:
         print(f"Error getting sale details: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
     finally:
         db.close()
 
 
-# Temporary test route
-@app.route('/receipt/<int:sale_id>/test')
-def test_receipt(sale_id):
-    """Test receipt template"""
-    db = SessionLocal()
-
+# Database initialization route - FIXED SINGLE VERSION
+@app.route('/init-now')
+def init_now():
+    """Initialize database - NO LOGIN REQUIRED - CLEANED VERSION"""
     try:
-        from sqlalchemy.orm import joinedload
-        sale = db.query(models.Sale).options(
-            joinedload(models.Sale.customer)
-        ).filter(models.Sale.id == sale_id).first()
+        from app.database import Base, engine, SessionLocal
+        from app.auth import get_password_hash
 
-        if not sale:
-            return "Sale not found", 404
+        # Create tables
+        Base.metadata.create_all(bind=engine)
 
-        sale_items = db.query(models.SaleItem).options(
-            joinedload(models.SaleItem.product)
-        ).filter(models.SaleItem.sale_id == sale_id).all()
+        # Create users
+        db = SessionLocal()
 
-        items_list = []
-        for item in sale_items:
-            items_list.append({
-                'name': item.product.name if item.product else 'Unknown',
-                'quantity': item.quantity,
-                'price': float(item.unit_price),
-                'total': float(item.quantity * item.unit_price)
-            })
+        # List of users to create
+        users_to_create = [
+            ("admin", "admin123", "admin", "System Administrator"),
+            ("cashier", "cashier123", "cashier", "Cashier User"),
+            ("inventory", "inventory123", "inventory", "Inventory Manager")
+        ]
 
-        receipt_data = {
-            'receipt_number': sale.receipt_number,
-            'created_at': sale.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-            'items': items_list,
-            'total_amount': float(sale.total_amount),
-            'payment_method': sale.payment_method or 'cash',
-            'customer': sale.customer.name if sale.customer else 'Walk-in'
-        }
+        created_users = []
+        for username, password, role, full_name in users_to_create:
+            # Check if user exists
+            existing = db.query(models.User).filter(models.User.username == username).first()
+            if not existing:
+                user = models.User(
+                    username=username,
+                    email=f"{username}@pos.com",
+                    hashed_password=get_password_hash(password),
+                    role=role,
+                    full_name=full_name,
+                    is_active=True
+                )
+                db.add(user)
+                created_users.append(username)
 
-        return render_template('receipt_test.html', receipt=receipt_data)
+        db.commit()
+        db.close()
+
+        # Create response HTML
+        html = f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>✅ POS System Initialized</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }}
+                .success {{ color: green; font-size: 24px; margin-bottom: 20px; }}
+                .step {{ margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 5px; }}
+                .login-btn {{ display: inline-block; padding: 10px 20px; background: #007bff; 
+                           color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
+                .user-list {{ background: #e9f7fe; padding: 15px; border-radius: 5px; margin: 15px 0; }}
+            </style>
+        </head>
+        <body>
+            <div class="success">✅ POS System Successfully Initialized!</div>
+
+            <div class="step">1. Database tables created successfully</div>
+            <div class="step">2. Users created: {', '.join(created_users) if created_users else 'All users already existed'}</div>
+
+            <div class="user-list">
+                <h3>Available Login Credentials:</h3>
+                <ul>
+                    <li><strong>Admin:</strong> admin / admin123</li>
+                    <li><strong>Cashier:</strong> cashier / cashier123</li>
+                    <li><strong>Inventory:</strong> inventory / inventory123</li>
+                </ul>
+            </div>
+
+            <p>You can now login to your POS system.</p>
+            <a class="login-btn" href="/login">Go to Login Page</a>
+        </body>
+        </html>
+        '''
+
+        return html
 
     except Exception as e:
-        return f"Error: {str(e)}", 500
-    finally:
-        db.close()
+        return f'''
+        <h1>❌ Initialization Error</h1>
+        <pre>{str(e)}</pre>
+        <p>Please check Render logs for details.</p>
+        '''
 
 
-@app.route('/debug/sale/<int:sale_id>')
-def debug_sale(sale_id):
-    """Debug sale data"""
-    db = SessionLocal()
-
-    try:
-        # Get sale
-        sale = db.query(models.Sale).filter(models.Sale.id == sale_id).first()
-        if not sale:
-            return jsonify({'error': 'Sale not found'})
-
-        # Check what crud.get_sale returns
-        sale_from_crud = crud.get_sale(db, sale_id)
-
-        # Check sale items
-        from sqlalchemy.orm import joinedload
-        sale_items = db.query(models.SaleItem).options(
-            joinedload(models.SaleItem.product)
-        ).filter(models.SaleItem.sale_id == sale_id).all()
-
-        return jsonify({
-            'sale_id': sale_id,
-            'sale_exists': bool(sale),
-            'sale_receipt_number': sale.receipt_number if sale else None,
-            'sale_from_crud_type': type(sale_from_crud).__name__,
-            'sale_items_type': type(sale_items).__name__,
-            'sale_items_length': len(sale_items) if hasattr(sale_items, '__len__') else 'Not a list',
-            'sale_items': [{
-                'id': item.id,
-                'product_id': item.product_id,
-                'product_name': item.product.name if item.product else None,
-                'quantity': item.quantity,
-                'unit_price': float(item.unit_price) if item.unit_price else None
-            } for item in sale_items] if hasattr(sale_items, '__iter__') else 'Not iterable'
-        })
-    except Exception as e:
-        return jsonify({'error': str(e), 'traceback': traceback.format_exc()})
-    finally:
-        db.close()
-
-        @app.route('/receipt/simple-test')
-        def simple_receipt_test():
-            """Simplest possible test"""
-            # Create test data directly
-            receipt_data = {
-                'receipt_number': 'TEST-001',
-                'created_at': '2024-01-01 12:00:00',
-                'items': [  # Plain Python list
-                    {'name': 'Test Product 1', 'quantity': 2, 'price': 10.0, 'total': 20.0},
-                    {'name': 'Test Product 2', 'quantity': 1, 'price': 15.0, 'total': 15.0}
-                ],
-                'total_amount': 35.0,
-                'payment_method': 'cash',
-                'customer': 'Test Customer'
-            }
-
-            print(f"DEBUG: Items is list: {isinstance(receipt_data['items'], list)}")
-
-            return render_template('receipt_test.html', receipt=receipt_data)
-
-        @app.route('/receipt/simple-test')
-        def simple_receipt_test():
-            """Simplest possible test - bypass database"""
-            # Create test data directly
-            receipt_data = {
-                'receipt_number': 'TEST-001',
-                'created_at': '2024-01-01 12:00:00',
-                'items': [  # Plain Python list
-                    {'name': 'Test Product 1', 'quantity': 2, 'price': 10.0, 'total': 20.0},
-                    {'name': 'Test Product 2', 'quantity': 1, 'price': 15.0, 'total': 15.0}
-                ],
-                'total_amount': 35.0,
-                'payment_method': 'cash',
-                'customer': 'Test Customer'
-            }
-
-            print(f"DEBUG: Items is list: {isinstance(receipt_data['items'], list)}")
-
-            # Use a simple template for testing
-            return """
-            <html>
-            <head><title>Simple Test</title></head>
-            <body>
-                <h1>Simple Receipt Test</h1>
-                <h2>Receipt Data:</h2>
-                <pre>{}</pre>
-
-                <h2>Items List (testing iteration):</h2>
-                <ul>
-            """.format(receipt_data) + "\n".join([
-                f"<li>{item['name']} - {item['quantity']} x {item['price']} = {item['total']}</li>"
-                for item in receipt_data['items']
-            ]) + """
-                </ul>
-                <p>Total: ${}</p>
-            </body>
-            </html>
-            """.format(receipt_data['total_amount'])
-
-        @app.route('/minimal-test')
-        def minimal_test():
-            """Minimal test to check template rendering"""
-            # Test data
-            receipt = {
-                'receipt_number': 'TEST-001',
-                'items': [
-                    {'name': 'Item 1', 'quantity': 1, 'price': 10.0, 'total': 10.0},
-                    {'name': 'Item 2', 'quantity': 2, 'price': 5.0, 'total': 10.0}
-                ]
-            }
-
-            # Simple template string to test
-            template = """
-            <!DOCTYPE html>
-            <html>
-            <body>
-                <h1>Testing iteration</h1>
-                <ul>
-                {% for item in receipt.items %}
-                    <li>{{ item.name }} - {{ item.quantity }} x ${{ item.price }}</li>
-                {% endfor %}
-                </ul>
-                <p>Total items: {{ receipt.items|length }}</p>
-            </body>
-            </html>
-            """
-
-            from flask import render_template_string
-            return render_template_string(template, receipt=receipt)
-
-
-# =============================================
-# Production Configuration for Render
-# =============================================
-
-# Set secret key from environment variable or use default
-app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
-
-# Session configuration for production
-# =============================================
-# Production Configuration for Render
-# =============================================
-
-# Set secret key from environment variable or use default
-app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
-
-# Session configuration for production
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=2)
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') == 'production'
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-
-
-# =============================================
-# Health Check Route (Required by Render)
-# =============================================
-
-@app.route('/health')
-def health_check():
-    """Health check endpoint for Render"""
-    return jsonify({
-        'status': 'healthy',
-        'service': 'POS System',
-        'timestamp': datetime.now().isoformat(),
-        'database': 'connected' if os.environ.get('DATABASE_URL') else 'local'
-    })
-
-
-# =============================================
-# Database Initialization Route
-# =============================================
-
+# Additional initialization endpoint for backward compatibility
 @app.route('/init-db')
 def initialize_database():
     """Initialize database tables (run once after deployment)"""
@@ -1742,216 +1435,11 @@ def initialize_database():
         }), 500
 
 
-# =============================================
-# Render Startup Script Integration
-# =============================================
-
-@app.route('/setup-render')
-def setup_render():
-    """One-time setup for Render deployment"""
-    try:
-        # Initialize database
-        from app.database import Base, engine
-        from app import models
-        Base.metadata.create_all(bind=engine)
-
-        # Create admin user if not exists
-        from app.auth import get_password_hash
-        db = SessionLocal()
-
-        admin = db.query(models.User).filter(models.User.username == "admin").first()
-        if not admin:
-            admin_user = models.User(
-                username='admin',
-                full_name='System Administrator',
-                email='admin@pos.com',
-                hashed_password=get_password_hash('admin123'),
-                role='admin',
-                is_active=True
-            )
-            db.add(admin_user)
-            db.commit()
-            admin_message = "Admin user created (admin/admin123)"
-        else:
-            admin_message = "Admin user already exists"
-
-        db.close()
-
-        return f"""
-        <h1>âœ… Render Setup Complete</h1>
-        <p>{admin_message}</p>
-        <p>Database tables created successfully</p>
-        <p><a href="/login">Go to Login</a></p>
-        """
-    except Exception as e:
-        return f"<h1>Setup Error</h1><pre>{str(e)}</pre>"
-
-
-
-# ============================================
-# GUARANTEED Database Initialization
-# ============================================
-
-@app.route('/init-now')
-def init_now():
-    """GUARANTEED database initialization - NO LOGIN REQUIRED"""
-    try:
-        from app.database import Base, engine, SessionLocal
-        from app import models
-        from app.auth import get_password_hash
-        
-        response = []
-        
-        # 1. Create tables
-        response.append("1. Creating database tables...")
-        Base.metadata.create_all(bind=engine)
-        response.append("    Tables created!")
-        
-        # 2. Create admin user
-        db = SessionLocal()
-        from app.models import User
-        
-        # Admin
-        admin = db.query(User).filter(User.username == "admin").first()
-        if not admin:
-            admin_user = User(
-                username="admin",
-                email="admin@pos.com",
-                hashed_password=get_password_hash("admin123"),
-                role="admin",
-                full_name="Administrator",
-                is_active=True
-            )
-            db.add(admin_user)
-            response.append("2.  Admin created: admin/admin123")
-        else:
-            response.append("2.  Admin already exists")
-        
-        # Cashier
-        cashier = db.query(User).filter(User.username == "cashier").first()
-        if not cashier:
-            cashier_user = User(
-                username="cashier",
-                email="cashier@pos.com",
-                hashed_password=get_password_hash("cashier123"),
-                role="cashier",
-                full_name="Cashier",
-                is_active=True
-            )
-            db.add(cashier_user)
-            response.append("3.  Cashier created: cashier/cashier123")
-        
-        # Inventory
-        inventory = db.query(User).filter(User.username == "inventory").first()
-        if not inventory:
-            inventory_user = User(
-                username="inventory",
-                email="inventory@pos.com",
-                hashed_password=get_password_hash("inventory123"),
-                role="inventory",
-                full_name="Inventory Manager",
-                is_active=True
-            )
-            db.add(inventory_user)
-            response.append("4.  Inventory created: inventory/inventory123")
-        
-        db.commit()
-        db.close()
-        
-        # Return success page
-        html = '''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title> POS System Initialized</title>
-            <style>
-                body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
-                .success { color: green; font-size: 24px; margin-bottom: 20px; }
-                .step { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 5px; }
-                .login-btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; 
-                           text-decoration: none; border-radius: 5px; margin-top: 20px; }
-            </style>
-        </head>
-        <body>
-            <div class="success"> POS System Successfully Initialized!</div>
-        '''
-        
-        foreach ($step in $response) {
-            $html += "<div class='step'>$step</div>`n"
-        }
-        
-        $html += '''
-            <p>You can now login to your POS system.</p>
-            <a class="login-btn" href="/login">Go to Login</a>
-            </body>
-            </html>
-        '''
-        
-        return $html
-        
-    except Exception as e:
-        return f'''
-        <h1> Initialization Error</h1>
-        <pre>{str(e)}</pre>
-        <p>Please check Render logs for details.</p>
-        '''
-
-
-# ============================================
-# INIT NOW - Database initialization
-# ============================================
-
-@app.route('/init-now')
-def init_now():
-    """Initialize database - NO LOGIN REQUIRED"""
-    try:
-        from app.database import Base, engine, SessionLocal
-        from app import models
-        from app.auth import get_password_hash
-        
-        # Create tables
-        Base.metadata.create_all(bind=engine)
-        
-        # Create users
-        db = SessionLocal()
-        from app.models import User
-        
-        users_to_create = [
-            ("admin", "admin123", "admin"),
-            ("cashier", "cashier123", "cashier"), 
-            ("inventory", "inventory123", "inventory")
-        ]
-        
-        for username, password, role in users_to_create:
-            if not db.query(User).filter(User.username == username).first():
-                user = User(
-                    username=username,
-                    email=f"{username}@pos.com",
-                    hashed_password=get_password_hash(password),
-                    role=role,
-                    full_name=role.title(),
-                    is_active=True
-                )
-                db.add(user)
-        
-        db.commit()
-        db.close()
-        
-        return '''
-        <h1> Database Initialized!</h1>
-        <p>Tables created and users added.</p>
-        <p><strong>Login Credentials:</strong></p>
-        <ul>
-            <li>Admin: admin / admin123</li>
-            <li>Cashier: cashier / cashier123</li>
-            <li>Inventory: inventory / inventory123</li>
-        </ul>
-        <p><a href="/login">Click here to login</a></p>
-        '''
-        
-    except Exception as e:
-        return f"<h1>Error:</h1><pre>{str(e)}</pre>"
-
+# Production configuration
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=2)
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') == 'production'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 if __name__ == '__main__':
     # Get port from environment variable (Render sets PORT)
@@ -1960,20 +1448,20 @@ if __name__ == '__main__':
     # Determine if we're in development or production
     debug_mode = os.environ.get('FLASK_ENV') != 'production'
 
-    print(f"ðŸš€ Starting POS System on port {port}")
-    print(f"ðŸ”§ Debug mode: {debug_mode}")
-    print(f"ðŸŒ Environment: {os.environ.get('FLASK_ENV', 'development')}")
+    print(f"🚀 Starting POS System on port {port}")
+    print(f"🔧 Debug mode: {debug_mode}")
+    print(f"🌍 Environment: {os.environ.get('FLASK_ENV', 'development')}")
 
     if os.environ.get('DATABASE_URL'):
-        print(f"ðŸ—„ï¸ Database: PostgreSQL (Render)")
+        print(f"🗄️ Database: PostgreSQL (Render)")
     else:
-        print(f"ðŸ—„ï¸ Database: SQLite (local)")
+        print(f"🗄️ Database: SQLite (local)")
 
-    print("\nðŸ“‹ Available URLs:")
+    print("\n🔗 Available URLs:")
     print(f"   http://localhost:{port}/login")
-    print(f"   http://localhost:{port}/setup-admin")
+    print(f"   http://localhost:{port}/init-now (first time only)")
+    print(f"   http://localhost:{port}/force-init-db")
     print(f"   http://localhost:{port}/health")
-    print(f"   http://localhost:{port}/init-db (first time only)")
 
     app.run(
         host='0.0.0.0',
@@ -1981,5 +1469,3 @@ if __name__ == '__main__':
         debug=debug_mode,
         threaded=True
     )
-
-
