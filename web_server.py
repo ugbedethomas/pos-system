@@ -48,6 +48,51 @@ def escapejs(value):
 app.jinja_env.filters['escapejs'] = escapejs
 
 
+@app.route('/force-init-db')
+def force_init_db():
+    """Initialize database WITHOUT login requirement"""
+    try:
+        from app.database import Base, engine
+        from app import models
+
+        print("🚀 FORCE Creating database tables...")
+
+        # Create all tables
+        Base.metadata.create_all(bind=engine)
+
+        # Also create admin user
+        from app.auth import get_password_hash
+        from app.models import User
+        from app.database import SessionLocal
+
+        db = SessionLocal()
+
+        # Create admin if not exists
+        admin = db.query(User).filter(User.username == "admin").first()
+        if not admin:
+            admin_user = User(
+                username="admin",
+                email="admin@pos.com",
+                hashed_password=get_password_hash("admin123"),
+                role="admin",
+                full_name="Administrator",
+                is_active=True
+            )
+            db.add(admin_user)
+            db.commit()
+            print("✅ Admin user created")
+
+        db.close()
+
+        return '''
+        <h1>✅ SUCCESS! Database Initialized</h1>
+        <p>Database tables created successfully!</p>
+        <p>Admin user created: admin/admin123</p>
+        <p><a href="/login">Go to Login</a></p>
+        '''
+    except Exception as e:
+        return f"<h1>Error:</h1><pre>{str(e)}</pre>"
+
 # Simple currency formatting function (since helpers might not exist yet)
 def format_naira(amount):
     """Format amount as Nigerian Naira"""
@@ -173,7 +218,7 @@ def get_top_selling_products(db, limit=5):
 # Check if user is logged in
 @app.before_request
 def require_login():
-    allowed_routes = ['login', 'setup_admin', 'static', 'health']
+    allowed_routes = ['login', 'setup_admin', 'static', 'health', 'initialize_database', 'create_tables_now']
 
     if request.endpoint in allowed_routes:
         return
