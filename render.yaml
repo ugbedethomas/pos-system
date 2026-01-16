@@ -3,8 +3,8 @@
     name: pos-system
     env: python
     plan: free
-    region: oregon
-    buildCommand: pip install -r requirements.txt
+    region: singapore
+    buildCommand: bash render_build.sh
     startCommand: gunicorn web_server:app
     envVars:
       - key: DATABASE_URL
@@ -13,10 +13,12 @@
           property: connectionString
       - key: SECRET_KEY
         generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.11.8
 
 databases:
   - name: pos-database
     plan: free
-    region: oregon
+    region: singapore
     databaseName: pos_system
     user: pos_user
