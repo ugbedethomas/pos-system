@@ -215,17 +215,14 @@ def require_login():
         'setup_admin',
         'static',
         'health',
-        'initialize_database',
         'force_init_db',
-        'init_now',  # Added this
-        'create_inventory_test_user'
+        'init_now'  # ← ADD THIS LINE
     ]
 
-    # Check if the endpoint is in public routes
+    # Also allow any route that starts with /force- or /init-
     if request.endpoint in public_routes:
         return
 
-    # Check for paths that should be public
     if request.path.startswith('/force-') or request.path.startswith('/init-'):
         return
 
@@ -1329,27 +1326,24 @@ def get_sale_details(sale_id):
 # Database initialization route - FIXED SINGLE VERSION
 @app.route('/init-now')
 def init_now():
-    """Initialize database - NO LOGIN REQUIRED - CLEANED VERSION"""
+    """Initialize database silently and redirect to login"""
     try:
         from app.database import Base, engine, SessionLocal
         from app.auth import get_password_hash
 
-        # Create tables
+        # 1. Create tables
         Base.metadata.create_all(bind=engine)
 
-        # Create users
+        # 2. Create users (only if they don't exist)
         db = SessionLocal()
 
-        # List of users to create
         users_to_create = [
             ("admin", "admin123", "admin", "System Administrator"),
             ("cashier", "cashier123", "cashier", "Cashier User"),
             ("inventory", "inventory123", "inventory", "Inventory Manager")
         ]
 
-        created_users = []
         for username, password, role, full_name in users_to_create:
-            # Check if user exists
             existing = db.query(models.User).filter(models.User.username == username).first()
             if not existing:
                 user = models.User(
@@ -1361,54 +1355,26 @@ def init_now():
                     is_active=True
                 )
                 db.add(user)
-                created_users.append(username)
 
         db.commit()
         db.close()
 
-        # Create response HTML
-        html = f'''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>✅ POS System Initialized</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }}
-                .success {{ color: green; font-size: 24px; margin-bottom: 20px; }}
-                .step {{ margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 5px; }}
-                .login-btn {{ display: inline-block; padding: 10px 20px; background: #007bff; 
-                           color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
-                .user-list {{ background: #e9f7fe; padding: 15px; border-radius: 5px; margin: 15px 0; }}
-            </style>
-        </head>
-        <body>
-            <div class="success">✅ POS System Successfully Initialized!</div>
+        # Log to console only (not shown to user)
+        print(f"✅ [{datetime.now()}] Database initialized via /init-now")
 
-            <div class="step">1. Database tables created successfully</div>
-            <div class="step">2. Users created: {', '.join(created_users) if created_users else 'All users already existed'}</div>
-
-            <div class="user-list">
-                <h3>Available Login Credentials:</h3>
-                <ul>
-                    <li><strong>Admin:</strong> admin / admin123</li>
-                    <li><strong>Cashier:</strong> cashier / cashier123</li>
-                    <li><strong>Inventory:</strong> inventory / inventory123</li>
-                </ul>
-            </div>
-
-            <p>You can now login to your POS system.</p>
-            <a class="login-btn" href="/login">Go to Login Page</a>
-        </body>
-        </html>
-        '''
-
-        return html
+        # IMMEDIATE REDIRECT to login
+        return redirect('/login')
 
     except Exception as e:
+        # Only show error if something goes wrong
         return f'''
-        <h1>❌ Initialization Error</h1>
-        <pre>{str(e)}</pre>
-        <p>Please check Render logs for details.</p>
+        <h1>Error</h1>
+        <p>Database initialization failed.</p>
+        <p><a href="/login">Try to login anyway</a></p>
+        <details>
+            <summary>Technical Details</summary>
+            <pre>{str(e)}</pre>
+        </details>
         '''
 
 
