@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory - POS System{% endblock %}
+{% block page_title %}Inventory Management{% endblock %}
+{% block page_subtitle %}Track stock levels and movements{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <!-- Inventory Summary -->
+    <div class="bg-white rounded-xl shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">Inventory Summary</h3>
+        <div class="space-y-4">
+            <div class="flex justify-between items-center">
+                <span class="text-gray-600">Total Products</span>
+                <span class="font-bold">{{ inventory_report|length }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-gray-600">Total Value</span>
+                <span class="font-bold">₦{{ format_naira(inventory_report|sum(attribute='total_value')) }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-gray-600">Low Stock Items</span>
+                <span class="font-bold text-yellow-600">{{ low_stock_products|length }}</span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-gray-600">Out of Stock</span>
+                <span class="font-bold text-red-600">{{ inventory_report|selectattr('status', 'equalto', 'OUT')|list|length }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stock Alert -->
+    <div class="lg:col-span-2">
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-800">Stock Alerts</h3>
+                <button onclick="showStockAdjustmentModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 text-sm">
+                    <i class="fas fa-edit mr-1"></i> Adjust Stock
+                </button>
+            </div>
+
+            {% if low_stock_products %}
+            <div class="space-y-3">
+                {% for product in low_stock_products[:5] %}
+                <div class="flex items-center justify-between p-3 bg-yellow-50 border-l-4 border-yellow-500">
+                    <div>
+                        <p class="font-medium">{{ product.name }}</p>
+                        <p class="text-sm text-gray-500">{{ product.sku }} • {{ product.category }}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-bold text-yellow-700">{{ product.stock_quantity }} / {{ product.min_stock_level }}</p>
+                        <p class="text-sm text-gray-500">Needs {{ product.min_stock_level - product.stock_quantity }} more</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8">
+                <i class="fas fa-check-circle text-green-500 text-4xl mb-3"></i>
+                <p class="text-gray-600">All products have sufficient stock</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Inventory Report Table -->
+<div class="bg-white rounded-xl shadow overflow-hidden mb-8">
+    <div class="px-6 py-4 border-b">
+        <h3 class="text-lg font-semibold text-gray-800">Inventory Report</h3>
+        <p class="text-sm text-gray-500">Detailed stock information for all products</p>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Current Stock</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Min Level</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Unit Price</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Value</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Updated</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for item in inventory_report %}
+                <tr class="hover:bg-gray-50 {% if item.status == 'LOW' %}low-stock{% elif item.status == 'OUT' %}out-of-stock{% endif %}">
+                    <td class="px-6 py-4">
+                        <div class="font-medium text-gray-900">{{ item.product_name }}</div>
+                        <div class="text-sm text-gray-500">ID: {{ item.product_id }}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="font-medium">{{ item.current_stock }}</span>
+                    </td>
+                    <td class="px-6 py-4">
+                        {{ item.min_stock_level }}
+                    </td>
+                    <td class="px-6 py-4">
+                        {% if item.status == 'OK' %}
+                        <span class="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">OK</span>
+                        {% elif item.status == 'LOW' %}
+                        <span class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">LOW</span>
+                        {% else %}
+                        <span class="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">OUT</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 font-medium">
+                        ₦{% for product in products %}
+                            {% if product.id == item.product_id %}
+                                {{ format_naira(product.price) }}
+                            {% endif %}
+                        {% endfor %}
+                    </td>
+                    <td class="px-6 py-4 font-bold">
+                        ₦{{ format_naira(item.total_value) }}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">
+                        {% if item.last_movement %}
+                            {{ item.last_movement.strftime('%Y-%m-%d %H:%M') }}
+                        {% else %}
+                            Never
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Export Button -->
+<div class="text-center">
+    <button onclick="exportInventory()" class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700">
+        <i class="fas fa-file-export mr-2"></i> Export Inventory Report
+    </button>
+</div>
+
+<!-- Stock Adjustment Modal -->
+<div id="stockAdjustmentModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4">
+        <h3 class="text-xl font-bold text-gray-800 mb-4">Adjust Stock</h3>
+
+        <form id="adjustStockForm">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Select Product</label>
+                    <select id="productSelect" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="">Choose a product...</option>
+                        {% for product in products %}
+                        <option value="{{ product.id }}" data-stock="{{ product.stock_quantity }}">
+                            {{ product.name }} (Current: {{ product.stock_quantity }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Adjustment Type</label>
+                    <select id="adjustmentType" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="purchase">Add Stock (Purchase)</option>
+                        <option value="adjustment">Manual Adjustment</option>
+                        <option value="return">Customer Return</option>
+                        <option value="damage">Damage/Waste</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                    <div class="flex space-x-2">
+                        <button type="button" onclick="changeQuantity(-1)" class="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <input type="number" id="quantity" value="1" min="1" class="flex-1 px-3 py-2 border rounded-lg text-center">
+                        <button type="button" onclick="changeQuantity(1)" class="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-1">Use negative numbers to reduce stock</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Reference/Notes</label>
+                    <input type="text" id="reference" placeholder="PO number, reason, etc." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+
+            <div class="flex space-x-3 mt-6">
+                <button type="button" onclick="submitStockAdjustment()" class="flex-1 bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700">
+                    <i class="fas fa-save mr-2"></i>Apply Adjustment
+                </button>
+                <button type="button" onclick="closeStockAdjustmentModal()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg hover:bg-gray-300">
+                    <i class="fas fa-times mr-2"></i>Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function showStockAdjustmentModal() {
+    document.getElementById('stockAdjustmentModal').classList.remove('hidden');
+}
+
+function closeStockAdjustmentModal() {
+    document.getElementById('stockAdjustmentModal').classList.add('hidden');
+}
+
+function changeQuantity(change) {
+    const input = document.getElementById('quantity');
+    let value = parseInt(input.value) || 0;
+    value += change;
+    if (value < -1000) value = -1000;
+    if (value > 1000) value = 1000;
+    input.value = value;
+}
+
+function submitStockAdjustment() {
+    const productId = document.getElementById('productSelect').value;
+    const adjustmentType = document.getElementById('adjustmentType').value;
+    const quantity = parseInt(document.getElementById('quantity').value);
+    const reference = document.getElementById('reference').value;
+
+    if (!productId) {
+        alert('Please select a product');
+        return;
+    }
+
+    if (quantity === 0) {
+        alert('Quantity cannot be zero');
+        return;
+    }
+
+    // This is where you would make an API call to adjust stock
+    alert(`Stock adjustment submitted:\nProduct: ₦{productId}\nType: ₦{adjustmentType}\nQuantity: ₦{quantity}\nReference: ₦{reference}`);
+
+    closeStockAdjustmentModal();
+}
+
+function exportInventory() {
+    alert('Inventory report exported! (This would download a CSV/Excel file)');
+}
+
+// Close modal when clicking outside
+document.getElementById('stockAdjustmentModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeStockAdjustmentModal();
+    }
+});
+</script>
+{% endblock %}

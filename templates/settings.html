@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - POS System{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block page_subtitle %}Manage your business information and preferences{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Company Information -->
+    <div class="bg-white rounded-xl shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-6">
+            <i class="fas fa-building mr-2"></i>Company Information
+        </h3>
+
+        <form id="company-form" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Company Name -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Company Name *
+                    </label>
+                    <input type="text" name="name" value="{{ company.name }}"
+                           class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="Your Business Name" required>
+                </div>
+
+                <!-- Tax ID -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Tax ID / VAT Number
+                    </label>
+                    <input type="text" name="tax_id" value="{{ company.tax_id }}"
+                           class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="VAT-123456789">
+                </div>
+
+                <!-- Address -->
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Address
+                    </label>
+                    <textarea name="address" rows="2"
+                              class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                              placeholder="123 Business Street, Lagos, Nigeria">{{ company.address }}</textarea>
+                </div>
+
+                <!-- Phone -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Phone Number
+                    </label>
+                    <input type="tel" name="phone" value="{{ company.phone }}"
+                           class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="+234 812 345 6789">
+                </div>
+
+                <!-- Email -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Email Address
+                    </label>
+                    <input type="email" name="email" value="{{ company.email }}"
+                           class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="info@yourbusiness.com">
+                </div>
+
+                <!-- Tax Rate -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Tax Rate (%)
+                    </label>
+                    <div class="relative">
+                        <input type="number" name="tax_rate" value="{{ (company.tax_rate * 100)|round(2) }}"
+                               step="0.01" min="0" max="50"
+                               class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                               placeholder="7.5">
+                        <div class="absolute inset-y-0 right-0 flex items-center pr-3">
+                            <span class="text-gray-500">%</span>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-1">Current tax: {{ (company.tax_rate * 100)|round(1) }}%</p>
+                </div>
+            </div>
+
+            <div class="pt-4 border-t">
+                <button type="submit" class="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">
+                    <i class="fas fa-save mr-2"></i>Save Company Information
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Bank Details -->
+    <div class="bg-white rounded-xl shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-6">
+            <i class="fas fa-university mr-2"></i>Bank Account Details
+        </h3>
+
+        <form id="bank-form" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Bank Name -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Bank Name
+                    </label>
+                    <input type="text" name="bank" value="{{ company.bank_details.bank }}"
+                           class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="Access Bank">
+                </div>
+
+                <!-- Account Name -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Account Name
+                    </label>
+                    <input type="text" name="name" value="{{ company.bank_details.name }}"
+                           class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="Your Business Name">
+                </div>
+
+                <!-- Account Number -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Account Number
+                    </label>
+                    <input type="text" name="account_number" value="{{ company.bank_details.account_number }}"
+                           class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                           placeholder="1234567890">
+                </div>
+            </div>
+
+            <div class="pt-4 border-t">
+                <button type="submit" class="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">
+                    <i class="fas fa-save mr-2"></i>Save Bank Details
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Receipt Settings -->
+    <div class="bg-white rounded-xl shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-6">
+            <i class="fas fa-receipt mr-2"></i>Receipt Settings
+        </h3>
+
+        <form id="receipt-form" class="space-y-6">
+            <!-- Receipt Footer -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Receipt Footer Message
+                </label>
+                <textarea name="receipt_footer" rows="3"
+                          class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          placeholder="Thank you for your patronage!">{{ company.receipt_footer }}</textarea>
+                <p class="text-sm text-gray-500 mt-1">This message appears at the bottom of all receipts.</p>
+            </div>
+
+            <div class="pt-4 border-t">
+                <button type="submit" class="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">
+                    <i class="fas fa-save mr-2"></i>Save Receipt Settings
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Currency Settings -->
+    <div class="bg-white rounded-xl shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-6">
+            <i class="fas fa-money-bill-wave mr-2"></i>Currency Settings
+        </h3>
+
+        <div class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="p-4 border rounded-lg bg-gray-50">
+                    <p class="font-medium">Currency Symbol</p>
+                    <p class="text-2xl font-bold mt-2">{{ company.currency }}</p>
+                </div>
+                <div class="p-4 border rounded-lg bg-gray-50">
+                    <p class="font-medium">Currency Code</p>
+                    <p class="text-2xl font-bold mt-2">{{ company.currency_code }}</p>
+                </div>
+                <div class="p-4 border rounded-lg bg-gray-50">
+                    <p class="font-medium">Format Example</p>
+                    <p class="text-2xl font-bold mt-2">{{ format_naira(1234.56) }}</p>
+                </div>
+            </div>
+            <p class="text-sm text-gray-500">Currency settings are currently fixed to Nigerian Naira (₦).</p>
+        </div>
+    </div>
+
+    <!-- Danger Zone -->
+    <div class="bg-white rounded-xl shadow p-6 border border-red-200">
+        <h3 class="text-lg font-semibold text-red-800 mb-6">
+            <i class="fas fa-exclamation-triangle mr-2"></i>Danger Zone
+        </h3>
+
+        <div class="space-y-4">
+            <p class="text-gray-600">These actions are irreversible. Please proceed with caution.</p>
+
+            <div class="space-y-3">
+                <!-- Clear Sales Data -->
+                <div class="flex justify-between items-center p-4 bg-red-50 rounded-lg">
+                    <div>
+                        <p class="font-medium text-red-800">Clear All Sales Data</p>
+                        <p class="text-sm text-red-600">Permanently delete all sales records</p>
+                    </div>
+                    <button onclick="confirmClearSales()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">
+                        Clear Data
+                    </button>
+                </div>
+
+                <!-- Reset to Defaults -->
+                <div class="flex justify-between items-center p-4 bg-yellow-50 rounded-lg">
+                    <div>
+                        <p class="font-medium text-yellow-800">Reset to Default Settings</p>
+                        <p class="text-sm text-yellow-600">Restore all settings to factory defaults</p>
+                    </div>
+                    <button onclick="confirmResetSettings()" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 font-medium">
+                        Reset Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alert Toast -->
+<div id="alert-toast" class="fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg hidden z-50">
+    <div class="flex items-center">
+        <i class="fas fa-exclamation-circle mr-3"></i>
+        <span id="alert-message"></span>
+        <button onclick="hideAlert()" class="ml-4">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+</div>
+
+<script>
+// Initialize forms
+document.addEventListener('DOMContentLoaded', function() {
+    // Company form
+    document.getElementById('company-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        await saveSettings('company', getFormData(this));
+    });
+
+    // Bank form
+    document.getElementById('bank-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const data = getFormData(this);
+        await saveSettings('bank', { bank_details: data });
+    });
+
+    // Receipt form
+    document.getElementById('receipt-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        await saveSettings('receipt', getFormData(this));
+    });
+});
+
+// Get form data
+function getFormData(form) {
+    const formData = new FormData(form);
+    const data = {};
+    formData.forEach((value, key) => {
+        // Convert tax rate from percentage to decimal
+        if (key === 'tax_rate') {
+            data[key] = parseFloat(value) / 100;
+        } else {
+            data[key] = value;
+        }
+    });
+    return data;
+}
+
+// Save settings
+async function saveSettings(type, data) {
+    try {
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showAlert('Settings saved successfully!', 'success');
+
+            // Reload page after 2 seconds to show updated settings
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            showAlert('Error: ' + result.message, 'error');
+        }
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        showAlert('Network error: ' + error.message, 'error');
+    }
+}
+
+// Confirm clear sales
+function confirmClearSales() {
+    if (confirm('⚠️ WARNING: This will permanently delete ALL sales records. This action cannot be undone.\n\nAre you absolutely sure?')) {
+        showAlert('This feature is not yet implemented', 'info');
+    }
+}
+
+// Confirm reset settings
+function confirmResetSettings() {
+    if (confirm('This will reset all settings to factory defaults. Are you sure?')) {
+        // In production, call API to reset settings
+        showAlert('This feature is not yet implemented', 'info');
+    }
+}
+
+// Alert system
+function showAlert(message, type = 'info') {
+    const alertToast = document.getElementById('alert-toast');
+    const alertMessage = document.getElementById('alert-message');
+
+    alertMessage.textContent = message;
+
+    // Set color based on type
+    alertToast.className = 'fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg hidden z-50 flex items-center';
+    if (type === 'error') {
+        alertToast.classList.add('bg-red-600', 'text-white');
+    } else if (type === 'success') {
+        alertToast.classList.add('bg-green-600', 'text-white');
+    } else if (type === 'warning') {
+        alertToast.classList.add('bg-yellow-600', 'text-white');
+    } else {
+        alertToast.classList.add('bg-blue-600', 'text-white');
+    }
+
+    alertToast.classList.remove('hidden');
+
+    // Auto-hide after 5 seconds
+    setTimeout(hideAlert, 5000);
+}
+
+function hideAlert() {
+    document.getElementById('alert-toast').classList.add('hidden');
+}
+</script>
+
+<style>
+input:focus, textarea:focus, select:focus {
+    outline: none;
+    ring: 2px;
+}
+</style>
+{% endblock %}

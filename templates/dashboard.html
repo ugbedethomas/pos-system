@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - POS System{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Overview and quick actions{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Stats Cards -->
+    <div class="bg-white rounded-xl shadow p-6">
+        <div class="flex items-center">
+            <div class="p-3 bg-indigo-100 rounded-lg">
+                <i class="fas fa-shopping-cart text-indigo-600 text-2xl"></i>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm text-gray-500">Today's Sales</p>
+                <h3 class="text-2xl font-bold">₦{{ "%.2f"|format(today_sales|default(0)) }}</h3>
+            </div>
+        </div>
+        <p class="text-sm text-green-600 mt-2">
+            <i class="fas fa-arrow-up mr-1"></i> 12% from yesterday
+        </p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6">
+        <div class="flex items-center">
+            <div class="p-3 bg-green-100 rounded-lg">
+                <i class="fas fa-box text-green-600 text-2xl"></i>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm text-gray-500">Total Products</p>
+                <h3 class="text-2xl font-bold">{{ total_products }}</h3>
+            </div>
+        </div>
+        <p class="text-sm text-gray-500 mt-2">{{ low_stock_count }} low in stock</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6">
+        <div class="flex items-center">
+            <div class="p-3 bg-blue-100 rounded-lg">
+                <i class="fas fa-users text-blue-600 text-2xl"></i>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm text-gray-500">Total Customers</p>
+                <h3 class="text-2xl font-bold">{{ total_customers }}</h3>
+            </div>
+        </div>
+        <p class="text-sm text-gray-500 mt-2">{{ new_customers_today }} new today</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6">
+        <div class="flex items-center">
+            <div class="p-3 bg-yellow-100 rounded-lg">
+                <i class="fas fa-chart-line text-yellow-600 text-2xl"></i>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm text-gray-500">Inventory Value</p>
+                <h3 class="text-2xl font-bold">₦{{ "%.2f"|format(inventory_value|default(0)) }}</h3>
+            </div>
+        </div>
+        <p class="text-sm text-gray-500 mt-2">Total stock value</p>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <div class="lg:col-span-2">
+        <div class="bg-white rounded-xl shadow p-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h3>
+            <div class="grid grid-cols-2 gap-4">
+                <a href="/pos" class="bg-indigo-50 border border-indigo-200 rounded-lg p-4 text-center hover:bg-indigo-100 transition-colors">
+                    <i class="fas fa-cash-register text-indigo-600 text-2xl mb-2"></i>
+                    <p class="font-medium">New Sale</p>
+                    <p class="text-sm text-gray-500">Start a new transaction</p>
+                </a>
+                <a href="/products/create" class="bg-green-50 border border-green-200 rounded-lg p-4 text-center hover:bg-green-100 transition-colors">
+                    <i class="fas fa-plus-circle text-green-600 text-2xl mb-2"></i>
+                    <p class="font-medium">Add Product</p>
+                    <p class="text-sm text-gray-500">Add new product</p>
+                </a>
+                <a href="/inventory" class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center hover:bg-blue-100 transition-colors">
+                    <i class="fas fa-boxes text-blue-600 text-2xl mb-2"></i>
+                    <p class="font-medium">Check Inventory</p>
+                    <p class="text-sm text-gray-500">View stock levels</p>
+                </a>
+                <a href="/sales" class="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center hover:bg-purple-100 transition-colors">
+                    <i class="fas fa-receipt text-purple-600 text-2xl mb-2"></i>
+                    <p class="font-medium">View Sales</p>
+                    <p class="text-sm text-gray-500">Sales history</p>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">Low Stock Alert</h3>
+        {% if low_stock_products %}
+        <div class="space-y-3">
+            {% for product in low_stock_products[:3] %}
+            <div class="p-3 border border-yellow-200 bg-yellow-50 rounded-lg">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="font-medium text-gray-800">{{ product.name }}</p>
+                        <p class="text-sm text-gray-600">Stock: {{ product.stock_quantity }}</p>
+                        <p class="text-xs text-gray-500">Reorder at: {{ product.min_stock_level|default(10) }}</p>
+                    </div>
+                    <a href="/products/edit/{{ product.id }}" class="text-indigo-600 hover:text-indigo-800">
+                        <i class="fas fa-edit"></i>
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% if low_stock_products|length > 3 %}
+        <p class="text-sm text-gray-500 mt-3">+{{ low_stock_products|length - 3 }} more items</p>
+        {% endif %}
+        {% else %}
+        <div class="text-center py-4">
+            <i class="fas fa-check-circle text-green-500 text-3xl mb-2"></i>
+            <p class="text-gray-500">All products have sufficient stock</p>
+        </div>
+        {% endif %}
+        <a href="/inventory" class="block text-center mt-4 text-indigo-600 hover:text-indigo-800 font-medium">
+            View All Inventory <i class="fas fa-arrow-right ml-1"></i>
+        </a>
+    </div>
+</div>
+
+<!-- Recent Sales & Top Products -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <!-- Recent Sales -->
+    <div class="bg-white rounded-xl shadow p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold text-gray-800">
+                <i class="fas fa-history mr-2"></i>Recent Sales
+            </h3>
+            <a href="/sales" class="text-sm text-indigo-600 hover:text-indigo-800">
+                View All <i class="fas fa-arrow-right ml-1"></i>
+            </a>
+        </div>
+
+        {% if recent_sales %}
+        <div class="space-y-3">
+            {% for sale in recent_sales %}
+            <div class="flex justify-between items-center p-3 border border-gray-100 rounded-lg hover:bg-gray-50">
+                <div>
+                    <div class="font-medium text-gray-800">#{{ sale.receipt_number }}</div>
+                    <div class="text-xs text-gray-500">{{ sale.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+                </div>
+                <div class="text-right">
+                    <div class="font-bold text-green-600">{{ format_naira(sale.total_amount) }}</div>
+                    <div class="text-xs text-gray-500">{{ sale.payment_method|title }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-8">
+            <i class="fas fa-receipt text-gray-300 text-4xl mb-3"></i>
+            <p class="text-gray-500">No sales yet today</p>
+            <a href="/pos" class="mt-2 inline-block text-indigo-600 hover:text-indigo-800">Make your first sale</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Top Selling Products -->
+    <div class="bg-white rounded-xl shadow p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold text-gray-800">
+                <i class="fas fa-chart-line mr-2"></i>Top Selling Products
+            </h3>
+            <a href="/products" class="text-sm text-indigo-600 hover:text-indigo-800">
+                View All <i class="fas fa-arrow-right ml-1"></i>
+            </a>
+        </div>
+
+        {% if top_products %}
+        <div class="space-y-4">
+            {% for product in top_products %}
+            <div class="flex items-center justify-between p-3 border border-gray-100 rounded-lg hover:bg-gray-50">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center mr-3">
+                        {% if loop.index == 1 %}
+                        <i class="fas fa-trophy text-yellow-500"></i>
+                        {% elif loop.index == 2 %}
+                        <i class="fas fa-medal text-gray-400"></i>
+                        {% elif loop.index == 3 %}
+                        <i class="fas fa-award text-orange-500"></i>
+                        {% else %}
+                        <span class="font-bold text-indigo-600">{{ loop.index }}</span>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-gray-800">{{ product.name }}</h4>
+                        <p class="text-xs text-gray-500">{{ product.category }} • SKU: {{ product.sku }}</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <div class="font-bold text-lg">{{ product.total_sold }} sold</div>
+                    <div class="text-sm text-gray-600">{{ format_naira(product.total_revenue) }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-8 text-gray-500">
+            <i class="fas fa-chart-bar text-4xl mb-2"></i>
+            <p>No sales data available yet</p>
+            <p class="text-sm mt-2">Make some sales to see top products here</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Recent Sales Table (Detailed View) -->
+<div class="bg-white rounded-xl shadow p-6">
+    <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-gray-800">Recent Sales (Detailed)</h3>
+        <a href="/sales" class="text-sm text-indigo-600 hover:text-indigo-800">View All Sales</a>
+    </div>
+
+    {% if recent_sales %}
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead>
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Receipt #</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {% for sale in recent_sales %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3">
+                        <span class="font-medium">{{ sale.receipt_number }}</span>
+                    </td>
+                    <td class="px-4 py-3">
+                        {% if sale.customer and sale.customer.name %}
+                        {{ sale.customer.name }}
+                        {% else %}
+                        <span class="text-gray-400">Walk-in Customer</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3">
+                        {% if sale.items %}
+                        {{ sale.items|length }} items
+                        {% else %}
+                        <span class="text-gray-400">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 font-medium">{{ format_naira(sale.total_amount) }}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 text-xs rounded-full
+                            {% if sale.payment_method == 'cash' %}bg-green-100 text-green-800
+                            {% elif sale.payment_method == 'transfer' %}bg-blue-100 text-blue-800
+                            {% elif sale.payment_method == 'pos' %}bg-purple-100 text-purple-800
+                            {% elif sale.payment_method == 'mobile' %}bg-yellow-100 text-yellow-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ sale.payment_method|title }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-500">
+                        {{ sale.created_at.strftime('%H:%M') }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center py-8">
+        <i class="fas fa-receipt text-gray-300 text-4xl mb-3"></i>
+        <p class="text-gray-500">No sales yet today</p>
+        <a href="/pos" class="mt-2 inline-block text-indigo-600 hover:text-indigo-800">Make your first sale</a>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Simple Naira formatting for numbers
+document.addEventListener('DOMContentLoaded', function() {
+    // Format all elements with class 'format-naira'
+    document.querySelectorAll('.format-naira').forEach(el => {
+        const amount = parseFloat(el.textContent.replace(/[^0-9.-]+/g, ''));
+        if (!isNaN(amount)) {
+            el.textContent = '₦' + amount.toLocaleString('en-NG', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+    });
+
+    // Add hover effects for interactive elements
+    document.querySelectorAll('.hover\\:bg-gray-50').forEach(el => {
+        el.addEventListener('mouseenter', function() {
+            this.style.transition = 'background-color 0.2s ease';
+        });
+    });
+});
+</script>
+
+<style>
+/* Additional styles for better visual appeal */
+.low-stock {
+    background: linear-gradient(90deg, #fef3c7 0%, #fde68a 100%);
+    border: 1px solid #fbbf24;
+}
+
+.cart-item {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.cart-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Medal colors for top products */
+.fa-trophy {
+    color: #f59e0b; /* Amber-500 */
+}
+
+.fa-medal {
+    color: #9ca3af; /* Gray-400 */
+}
+
+.fa-award {
+    color: #f97316; /* Orange-500 */
+}
+
+/* Quick action cards */
+.bg-indigo-50:hover, .bg-green-50:hover, .bg-blue-50:hover, .bg-purple-50:hover {
+    transform: translateY(-2px);
+    transition: transform 0.2s ease;
+}
+</style>
+{% endblock %}

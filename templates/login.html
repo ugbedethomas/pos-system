@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - POS System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .login-card {
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center">
+    <div class="login-card rounded-2xl shadow-2xl p-8 w-full max-w-md">
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-cash-register text-3xl text-purple-600"></i>
+            </div>
+            <h1 class="text-3xl font-bold text-white">POS Pro</h1>
+            <p class="text-purple-200 mt-2">Point of Sale System</p>
+        </div>
+
+        {% if error %}
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/login" class="space-y-6">
+            <div>
+                <label class="block text-white text-sm font-medium mb-2">
+                    <i class="fas fa-user mr-2"></i>Username
+                </label>
+                <input type="text" name="username" required
+                       class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+                       placeholder="Enter your username">
+            </div>
+
+            <div>
+                <label class="block text-white text-sm font-medium mb-2">
+                    <i class="fas fa-lock mr-2"></i>Password
+                </label>
+                <input type="password" name="password" required
+                       class="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+                       placeholder="Enter your password">
+            </div>
+
+            <button type="submit"
+                    class="w-full bg-white text-purple-700 font-bold py-3 px-4 rounded-lg hover:bg-purple-50 transition duration-300 transform hover:-translate-y-1">
+                <i class="fas fa-sign-in-alt mr-2"></i>Sign In
+            </button>
+        </form>
+
+        <div class="mt-8 text-center">
+            <p class="text-purple-200 text-sm">
+                <i class="fas fa-info-circle mr-1"></i>
+                Demo Credentials:
+            </p>
+            <div class="grid grid-cols-3 gap-2 mt-2">
+                <div class="bg-white/10 rounded p-2">
+                    <p class="text-white text-xs font-bold">Admin</p>
+                    <p class="text-purple-200 text-xs">admin/admin123</p>
+                </div>
+                <div class="bg-white/10 rounded p-2">
+                    <p class="text-white text-xs font-bold">Cashier</p>
+                    <p class="text-purple-200 text-xs">cashier/cashier123</p>
+                </div>
+                <div class="bg-white/10 rounded p-2">
+                    <p class="text-white text-xs font-bold">Inventory</p>
+                    <p class="text-purple-200 text-xs">inventory/inventory123</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 text-center">
+            <a href="/setup-admin" class="text-purple-200 hover:text-white text-sm">
+                <i class="fas fa-cog mr-1"></i>First time setup? Create admin user
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Add floating animation to card
+        const card = document.querySelector('.login-card');
+        card.style.animation = 'float 3s ease-in-out infinite';
+
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes float {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-10px); }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

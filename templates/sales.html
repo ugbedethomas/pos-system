@@ -1,0 +1,892 @@
+{% extends "base.html" %}
+
+{% block title %}Sales History - POS System{% endblock %}
+{% block page_title %}Sales History{% endblock %}
+{% block page_subtitle %}View and manage past transactions{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="flex items-center">
+                <div class="bg-blue-100 p-3 rounded-full mr-4">
+                    <i class="fas fa-shopping-cart text-blue-600"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Total Transactions</p>
+                    <p class="text-2xl font-bold">{{ total_transactions }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="flex items-center">
+                <div class="bg-green-100 p-3 rounded-full mr-4">
+                    <i class="fas fa-money-bill-wave text-green-600"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Total Revenue</p>
+                    <p class="text-2xl font-bold">{{ format_naira(total_sales) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="flex items-center">
+                <div class="bg-purple-100 p-3 rounded-full mr-4">
+                    <i class="fas fa-sun text-purple-600"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Today's Sales</p>
+                    <p class="text-2xl font-bold">{{ format_naira(today_sales) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="flex items-center">
+                <div class="bg-yellow-100 p-3 rounded-full mr-4">
+                    <i class="fas fa-chart-line text-yellow-600"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Average Sale</p>
+                    <p class="text-2xl font-bold">{{ format_naira(average_sale) }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sales Table -->
+    <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+        <div class="px-6 py-4 border-b">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-gray-800">Recent Transactions</h3>
+                <div class="flex space-x-3">
+                    <!-- Date Range Picker -->
+                    <div class="flex items-center space-x-2">
+                        <input type="date" id="start-date" class="px-3 py-2 border rounded-lg">
+                        <span class="text-gray-500">to</span>
+                        <input type="date" id="end-date" class="px-3 py-2 border rounded-lg">
+                        <button onclick="filterByDate()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">
+                            <i class="fas fa-filter"></i>
+                        </button>
+                        <button onclick="clearFilter()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <button onclick="printSalesReport()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">
+                        <i class="fas fa-print mr-2"></i>Print
+                    </button>
+                    <button onclick="exportSalesData()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        <i class="fas fa-download mr-2"></i>Export
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Receipt #
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Date & Time
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Customer
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Items
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Total
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Payment
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200" id="sales-table-body">
+                    {% if sales and sales|length > 0 %}
+                        {% for sale in sales %}
+                        <tr class="sale-row hover:bg-gray-50"
+                            data-sale-id="{{ sale.id }}"
+                            data-date="{{ sale.created_at.strftime('%Y-%m-%d') if sale.created_at else '' }}"
+                            data-total="{{ sale.total_amount }}">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900">
+                                    {{ sale.receipt_number or 'REC-' ~ (sale.id|string).rjust(6, '0') }}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">
+                                    {% if sale.created_at %}
+                                        {{ sale.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">
+                                    {{ sale.customer.name if sale.customer else 'Walk-in' }}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">
+                                    {{ sale.items|length if sale.items else 0 }} item{% if sale.items and sale.items|length != 1 %}s{% endif %}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-bold text-gray-900">
+                                    {{ format_naira(sale.total_amount) }}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full
+                                    {% if sale.payment_method == 'cash' %}bg-green-100 text-green-800
+                                    {% elif sale.payment_method == 'transfer' %}bg-blue-100 text-blue-800
+                                    {% elif sale.payment_method == 'pos' %}bg-purple-100 text-purple-800
+                                    {% elif sale.payment_method == 'mobile' %}bg-yellow-100 text-yellow-800
+                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {{ sale.payment_method|upper if sale.payment_method else 'CASH' }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button onclick="viewSaleDetails('{{ sale.id }}')"
+                                        class="text-indigo-600 hover:text-indigo-900 mr-4"
+                                        title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button onclick="reprintReceipt('{{ sale.id }}')"
+                                        class="text-green-600 hover:text-green-900 mr-4"
+                                        title="Reprint Receipt">
+                                    <i class="fas fa-print"></i>
+                                </button>
+                                {% if sale.voidable is not defined or sale.voidable %}
+                                <button onclick="voidSale('{{ sale.id }}')"
+                                        class="text-red-600 hover:text-red-900"
+                                        title="Void Sale">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="px-6 py-12 text-center">
+                                <div class="text-gray-500">
+                                    <i class="fas fa-chart-bar text-4xl mb-4"></i>
+                                    <p class="text-lg">No sales records found</p>
+                                    <p class="text-sm mt-2">
+                                        {% if total_transactions == 0 %}
+                                            Start making sales to see transaction history here.
+                                        {% else %}
+                                            No sales match your current filter.
+                                        {% endif %}
+                                    </p>
+                                    <a href="/pos" class="mt-4 inline-block px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                                        <i class="fas fa-cash-register mr-2"></i>Go to POS
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if sales and sales|length > 0 %}
+        <div class="px-6 py-4 border-t bg-gray-50">
+            <div class="flex justify-between items-center">
+                <div class="text-sm text-gray-600">
+                    Showing <span id="shown-count">{{ sales|length }}</span> of {{ sales|length }} records
+                </div>
+                <div class="text-sm text-gray-600">
+                    Total Revenue: <span class="font-bold">{{ format_naira(total_sales) }}</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Summary Section -->
+    {% if sales and sales|length > 0 %}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Payment Methods Summary -->
+        <div class="bg-white rounded-xl shadow p-6">
+            <h4 class="font-semibold text-gray-800 mb-4">Payment Methods</h4>
+            <div class="space-y-3">
+                {% set payment_summary = {} %}
+                {% for sale in sales %}
+                    {% set method = sale.payment_method or 'cash' %}
+                    {% if method not in payment_summary %}
+                        {% set _ = payment_summary.update({method: {'count': 1, 'total': sale.total_amount}}) %}
+                    {% else %}
+                        {% set _ = payment_summary.update({
+                            method: {
+                                'count': payment_summary[method].count + 1,
+                                'total': payment_summary[method].total + sale.total_amount
+                            }
+                        }) %}
+                    {% endif %}
+                {% endfor %}
+
+                {% for method, data in payment_summary.items() %}
+                <div class="flex justify-between items-center p-2 hover:bg-gray-50 rounded">
+                    <div>
+                        <span class="text-sm font-medium text-gray-700">{{ method|upper }}</span>
+                        <span class="text-xs text-gray-500 ml-2">{{ data.count }} sales</span>
+                    </div>
+                    <span class="font-semibold">{{ format_naira(data.total) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Today's Summary -->
+        <div class="bg-white rounded-xl shadow p-6">
+            <h4 class="font-semibold text-gray-800 mb-4">Today's Summary</h4>
+            <div class="space-y-4">
+                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span class="text-sm text-gray-600">Transactions Today</span>
+                    <span class="font-bold text-lg">
+                        {% set today_count = sales|selectattr('created_at', 'defined')|selectattr('created_at.date', 'equalto', today)|list|length %}
+                        {{ today_count }}
+                    </span>
+                </div>
+                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span class="text-sm text-gray-600">Revenue Today</span>
+                    <span class="font-bold text-lg">{{ format_naira(today_sales) }}</span>
+                </div>
+                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span class="text-sm text-gray-600">Avg. Sale Today</span>
+                    <span class="font-bold text-lg">
+                        {% if today_count > 0 %}
+                            {{ format_naira(today_sales / today_count) }}
+                        {% else %}
+                            {{ format_naira(0) }}
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="bg-white rounded-xl shadow p-6">
+            <h4 class="font-semibold text-gray-800 mb-4">Quick Actions</h4>
+            <div class="space-y-3">
+                <button onclick="window.print()"
+                        class="w-full px-4 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 flex items-center justify-center transition-colors">
+                    <i class="fas fa-print mr-3"></i>Print Report
+                </button>
+                <button onclick="exportSalesData()"
+                        class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center transition-colors">
+                    <i class="fas fa-file-excel mr-3"></i>Export to Excel
+                </button>
+                <button onclick="refreshSales()"
+                        class="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center transition-colors">
+                    <i class="fas fa-sync-alt mr-3"></i>Refresh Data
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Sale Details Modal -->
+<div id="sale-details-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6 border-b">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-bold text-gray-800">Sale Details</h3>
+                <button onclick="closeSaleDetails()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+        </div>
+        <div class="p-6" id="sale-details-content">
+            <!-- Sale details will be loaded here -->
+        </div>
+    </div>
+</div>
+
+<!-- Alert Toast -->
+<div id="alert-toast" class="hidden fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 max-w-md">
+    <div class="flex items-center">
+        <i id="alert-icon" class="fas mr-3"></i>
+        <span id="alert-message" class="flex-1"></span>
+        <button onclick="hideAlert()" class="ml-4 text-white hover:text-gray-200">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+</div>
+
+<script>
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Set today's date as default in date pickers
+    const today = new Date().toISOString().split('T')[0];
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const oneWeekAgoStr = oneWeekAgo.toISOString().split('T')[0];
+
+    document.getElementById('start-date').value = oneWeekAgoStr;
+    document.getElementById('end-date').value = today;
+
+    // Load any saved filter
+    const savedFilter = localStorage.getItem('salesFilter');
+    if (savedFilter) {
+        const filter = JSON.parse(savedFilter);
+        if (filter.startDate) document.getElementById('start-date').value = filter.startDate;
+        if (filter.endDate) document.getElementById('end-date').value = filter.endDate;
+        applyDateFilter();
+    } else {
+        // Apply default filter (last 7 days)
+        applyDateFilter();
+    }
+});
+
+// Filter sales by date
+function filterByDate() {
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+
+    if (!startDate || !endDate) {
+        showAlert('Please select both start and end dates', 'warning');
+        return;
+    }
+
+    if (startDate > endDate) {
+        showAlert('Start date cannot be after end date', 'error');
+        return;
+    }
+
+    // Save filter to localStorage
+    localStorage.setItem('salesFilter', JSON.stringify({ startDate, endDate }));
+
+    applyDateFilter();
+}
+
+function applyDateFilter() {
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+    const rows = document.querySelectorAll('.sale-row');
+    let shownCount = 0;
+    let filteredTotal = 0;
+
+    rows.forEach(row => {
+        const saleDate = row.getAttribute('data-date');
+        const saleTotal = parseFloat(row.getAttribute('data-total')) || 0;
+
+        if (saleDate && saleDate >= startDate && saleDate <= endDate) {
+            row.style.display = '';
+            shownCount++;
+            filteredTotal += saleTotal;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    document.getElementById('shown-count').textContent = shownCount;
+
+    // Update filtered total in UI
+    const totalElement = document.querySelector('.bg-gray-50 .font-bold');
+    if (totalElement && filteredTotal > 0) {
+        totalElement.textContent = '₦' + filteredTotal.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
+    }
+
+    if (shownCount === 0) {
+        showAlert('No sales found for the selected date range', 'info');
+    } else {
+        showAlert(`Showing ${shownCount} sales (₦${filteredTotal.toFixed(2)}) for selected date range`, 'success');
+    }
+}
+
+function clearFilter() {
+    document.getElementById('start-date').value = '';
+    document.getElementById('end-date').value = '';
+    localStorage.removeItem('salesFilter');
+
+    const rows = document.querySelectorAll('.sale-row');
+    rows.forEach(row => row.style.display = '');
+
+    document.getElementById('shown-count').textContent = rows.length;
+    showAlert('Filter cleared', 'info');
+}
+
+// View sale details
+async function viewSaleDetails(saleId) {
+    try {
+        showAlert('Loading sale details...', 'info');
+
+        // Fetch sale details from API
+        const response = await fetch(`/api/sales/${saleId}`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch sale details');
+        }
+
+        const sale = await response.json();
+
+        const modal = document.getElementById('sale-details-modal');
+        const content = document.getElementById('sale-details-content');
+
+        // Format items list
+        let itemsHtml = '';
+        if (sale.items && sale.items.length > 0) {
+            itemsHtml = `
+                <table class="min-w-full divide-y divide-gray-200 mt-4">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Product</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Qty</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Price</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        ${sale.items.map(item => `
+                            <tr>
+                                <td class="px-4 py-2 text-sm">${item.product_name || 'Product'}</td>
+                                <td class="px-4 py-2 text-sm">${item.quantity || 1}</td>
+                                <td class="px-4 py-2 text-sm">₦${(item.price || 0).toFixed(2)}</td>
+                                <td class="px-4 py-2 text-sm font-semibold">₦${((item.price || 0) * (item.quantity || 1)).toFixed(2)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // Create modal content
+        content.innerHTML = `
+            <div class="space-y-6">
+                <!-- Sale Header -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <p class="text-sm text-gray-600">Receipt Number</p>
+                        <p class="text-lg font-bold">${sale.receipt_number || 'REC-' + sale.id.toString().padStart(6, '0')}</p>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <p class="text-sm text-gray-600">Date & Time</p>
+                        <p class="text-lg font-bold">${new Date(sale.created_at).toLocaleString()}</p>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <p class="text-sm text-gray-600">Payment Method</p>
+                        <p class="text-lg font-bold">${sale.payment_method?.toUpperCase() || 'CASH'}</p>
+                    </div>
+                </div>
+
+                <!-- Customer Info -->
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <h4 class="font-semibold text-gray-800 mb-2">Customer Information</h4>
+                    <p class="text-gray-700">${sale.customer?.name || 'Walk-in Customer'}</p>
+                    ${sale.customer?.phone ? `<p class="text-sm text-gray-600 mt-1">Phone: ${sale.customer.phone}</p>` : ''}
+                </div>
+
+                <!-- Items -->
+                <div>
+                    <h4 class="font-semibold text-gray-800 mb-3">Items Sold</h4>
+                    ${itemsHtml || '<p class="text-gray-500">No items found</p>'}
+                </div>
+
+                <!-- Totals -->
+                <div class="p-4 bg-gray-50 rounded-lg space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Subtotal:</span>
+                        <span class="font-semibold">₦${(sale.subtotal || sale.total_amount || 0).toFixed(2)}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Tax:</span>
+                        <span class="font-semibold">₦${(sale.tax_amount || 0).toFixed(2)}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Discount:</span>
+                        <span class="font-semibold">₦${(sale.discount_amount || 0).toFixed(2)}</span>
+                    </div>
+                    <div class="flex justify-between pt-2 border-t border-gray-300">
+                        <span class="text-lg font-bold text-gray-800">Total:</span>
+                        <span class="text-lg font-bold text-gray-800">₦${(sale.total_amount || 0).toFixed(2)}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Amount Paid:</span>
+                        <span class="font-semibold">₦${(sale.amount_paid || sale.total_amount || 0).toFixed(2)}</span>
+                    </div>
+                    ${sale.change_amount > 0 ? `
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Change:</span>
+                        <span class="font-semibold">₦${sale.change_amount.toFixed(2)}</span>
+                    </div>
+                    ` : ''}
+                </div>
+
+                <!-- Actions -->
+                <div class="flex space-x-3 pt-4 border-t">
+                    <button onclick="reprintReceipt('${sale.id}')"
+                            class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex-1 flex items-center justify-center">
+                        <i class="fas fa-print mr-2"></i>Reprint Receipt
+                    </button>
+                    <button onclick="closeSaleDetails()"
+                            class="px-6 py-3 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 flex-1 flex items-center justify-center">
+                        <i class="fas fa-times mr-2"></i>Close
+                    </button>
+                </div>
+            </div>
+        `;
+
+        modal.classList.remove('hidden');
+        showAlert('Sale details loaded', 'success');
+
+    } catch (error) {
+        console.error('Error loading sale details:', error);
+
+        // Fallback: Show basic info from table row
+        const saleRow = document.querySelector(`.sale-row[data-sale-id="${saleId}"]`);
+        if (saleRow) {
+            const cells = saleRow.cells;
+            const modal = document.getElementById('sale-details-modal');
+            const content = document.getElementById('sale-details-content');
+
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <p class="text-sm text-gray-600">Receipt Number</p>
+                        <p class="text-lg font-bold">${cells[0].textContent.trim()}</p>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <p class="text-sm text-gray-600">Date & Time</p>
+                        <p class="text-lg font-bold">${cells[1].textContent.trim()}</p>
+                    </div>
+                    <div class="p-4 bg-gray-50 rounded-lg">
+                        <p class="text-lg font-bold">${cells[4].textContent.trim()}</p>
+                        <p class="text-sm text-gray-600 mt-1">Total Amount</p>
+                    </div>
+                    <div class="flex space-x-3 pt-4 border-t">
+                        <button onclick="reprintReceipt('${saleId}')"
+                                class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex-1">
+                            <i class="fas fa-print mr-2"></i>Reprint Receipt
+                        </button>
+                        <button onclick="closeSaleDetails()"
+                                class="px-6 py-3 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 flex-1">
+                            <i class="fas fa-times mr-2"></i>Close
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            modal.classList.remove('hidden');
+            showAlert('Showing basic sale information', 'info');
+        } else {
+            showAlert('Error loading sale details', 'error');
+        }
+    }
+}
+
+function closeSaleDetails() {
+    document.getElementById('sale-details-modal').classList.add('hidden');
+}
+
+// Reprint receipt
+function reprintReceipt(saleId) {
+    showAlert(`Printing receipt for sale #${saleId}`, 'info');
+
+    // Open receipt in new window for printing
+    const printWindow = window.open(`/receipt/${saleId}/print`, '_blank');
+    if (!printWindow) {
+        showAlert('Please allow popups to print receipts', 'warning');
+    }
+}
+
+// Void sale
+function voidSale(saleId) {
+    if (!confirm('⚠️ Are you sure you want to void this sale?\n\nThis action cannot be undone and will:\n• Mark the sale as voided\n• Update inventory (if applicable)\n• Create an audit trail')) {
+        return;
+    }
+
+    showAlert('Voiding sale...', 'info');
+
+    // Call void API
+    fetch(`/api/sales/${saleId}/void`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('✅ Sale has been voided successfully', 'success');
+            // Update the row appearance
+            const row = document.querySelector(`.sale-row[data-sale-id="${saleId}"]`);
+            if (row) {
+                row.style.opacity = '0.6';
+                row.style.textDecoration = 'line-through';
+                row.style.backgroundColor = '#fef2f2';
+                // Disable void button
+                const voidBtn = row.querySelector('button[onclick*="voidSale"]');
+                if (voidBtn) voidBtn.disabled = true;
+            }
+        } else {
+            showAlert(`❌ Error: ${data.message}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error voiding sale:', error);
+        showAlert('❌ Network error voiding sale', 'error');
+    });
+}
+
+// Print sales report
+function printSalesReport() {
+    showAlert('Preparing print report...', 'info');
+
+    // Create a print-friendly version
+    const printContent = document.createElement('div');
+    const today = new Date().toLocaleDateString();
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+    const dateRange = startDate && endDate ? ` (${startDate} to ${endDate})` : '';
+
+    printContent.innerHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Sales Report - {{ company.name }}</title>
+            <style>
+                @media print {
+                    @page { size: A4; margin: 20mm; }
+                    body { font-family: Arial, sans-serif; margin: 0; padding: 0; color: #333; }
+                    h1 { font-size: 24px; margin-bottom: 10px; color: #000; }
+                    h2 { font-size: 18px; margin: 20px 0 10px; color: #333; }
+                    table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
+                    th { background-color: #f5f5f5; font-weight: bold; padding: 8px; border: 1px solid #ddd; text-align: left; }
+                    td { padding: 8px; border: 1px solid #ddd; }
+                    .total-row { font-weight: bold; background-color: #f9f9f9; }
+                    .summary { margin-top: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px; }
+                    .no-print { display: none !important; }
+                }
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                h1 { color: #333; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f5f5f5; }
+                .summary { margin-top: 30px; padding: 15px; background-color: #f5f5f5; border-radius: 5px; }
+            </style>
+        </head>
+        <body>
+            <div class="no-print" style="text-align: center; margin-bottom: 20px;">
+                <button onclick="window.print()" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Print Report
+                </button>
+                <button onclick="window.close()" style="padding: 10px 20px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+                    Close
+                </button>
+            </div>
+
+            <h1>{{ company.name }}</h1>
+            <h2>Sales Report${dateRange}</h2>
+            <p>Generated: ${today}</p>
+
+            ${document.querySelector('.bg-white.rounded-xl.shadow-lg').outerHTML}
+
+            <script>
+                window.onload = function() {
+                    window.print();
+                    setTimeout(function() {
+                        window.close();
+                    }, 1000);
+                };
+            <\/script>
+        </body>
+        </html>
+    `;
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    printWindow.document.write(printContent.innerHTML);
+    printWindow.document.close();
+
+    showAlert('Print dialog opened', 'success');
+}
+
+// Export sales data
+function exportSalesData() {
+    showAlert('Exporting sales data...', 'info');
+
+    // Get all visible sales data
+    const rows = [];
+    const headers = ['Receipt #', 'Date', 'Customer', 'Items', 'Total', 'Payment Method'];
+    rows.push(headers);
+
+    document.querySelectorAll('.sale-row').forEach(row => {
+        if (row.style.display !== 'none') {
+            const cells = row.cells;
+            const rowData = [
+                cells[0].textContent.trim(),
+                cells[1].textContent.trim(),
+                cells[2].textContent.trim(),
+                cells[3].textContent.trim(),
+                cells[4].textContent.trim().replace('₦', ''),
+                cells[5].textContent.trim()
+            ];
+            rows.push(rowData);
+        }
+    });
+
+    // Create CSV
+    const csvContent = rows.map(row =>
+        row.map(cell => `"${cell}"`).join(',')
+    ).join('\n');
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `sales_report_${new Date().toISOString().slice(0,10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showAlert('✅ Sales data exported successfully!', 'success');
+}
+
+// Refresh sales data
+function refreshSales() {
+    showAlert('Refreshing sales data...', 'info');
+    window.location.reload();
+}
+
+// Alert system
+function showAlert(message, type = 'info') {
+    const alertToast = document.getElementById('alert-toast');
+    const alertMessage = document.getElementById('alert-message');
+    const alertIcon = document.getElementById('alert-icon');
+
+    alertMessage.textContent = message;
+
+    // Set color and icon based on type
+    alertToast.className = 'hidden fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 max-w-md flex items-center';
+
+    if (type === 'error') {
+        alertToast.classList.add('bg-red-600', 'text-white');
+        alertIcon.className = 'fas fa-exclamation-circle';
+    } else if (type === 'success') {
+        alertToast.classList.add('bg-green-600', 'text-white');
+        alertIcon.className = 'fas fa-check-circle';
+    } else if (type === 'warning') {
+        alertToast.classList.add('bg-yellow-600', 'text-white');
+        alertIcon.className = 'fas fa-exclamation-triangle';
+    } else {
+        alertToast.classList.add('bg-blue-600', 'text-white');
+        alertIcon.className = 'fas fa-info-circle';
+    }
+
+    alertToast.classList.remove('hidden');
+
+    // Auto-hide
+    setTimeout(hideAlert, 3000);
+}
+
+function hideAlert() {
+    document.getElementById('alert-toast').classList.add('hidden');
+}
+
+// Helper: Get CSRF token
+function getCSRFToken() {
+    const metaTag = document.querySelector('meta[name="csrf-token"]');
+    if (metaTag) return metaTag.getAttribute('content');
+
+    // Try common Flask CSRF token names
+    const tokenNames = ['csrf_token', 'csrf-token', 'X-CSRFToken', '_csrf_token'];
+    for (const tokenName of tokenNames) {
+        const element = document.querySelector(`[name="${tokenName}"]`);
+        if (element) return element.value;
+    }
+
+    return '';
+}
+</script>
+
+<style>
+/* Animation for alerts */
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+#alert-toast {
+    animation: slideIn 0.3s ease;
+}
+
+#sale-details-modal {
+    animation: fadeIn 0.3s ease;
+}
+
+/* Table styles */
+table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+th {
+    position: sticky;
+    top: 0;
+    background-color: #f9fafb;
+    z-index: 10;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+tbody tr:hover {
+    background-color: #f9fafb;
+}
+
+/* Button transitions */
+button {
+    transition: all 0.2s ease;
+}
+
+button:active {
+    transform: translateY(1px);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .overflow-x-auto {
+        font-size: 12px;
+    }
+
+    .px-6 {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+
+    .py-4 {
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+    }
+
+    .grid-cols-4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .grid-cols-3 {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}

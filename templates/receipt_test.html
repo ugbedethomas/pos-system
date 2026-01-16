@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Receipt Test</title>
+</head>
+<body>
+    <h1>Receipt Debug</h1>
+
+    <h2>Testing Iteration (Safe Method):</h2>
+    <ul>
+    {% if receipt.items %}
+        {% if receipt.items is iterable and receipt.items is not string %}
+            {% for item in receipt.items %}
+                <li>{{ item.name }} - {{ item.quantity }} x {{ item.price }} = {{ item.total }}</li>
+            {% endfor %}
+        {% else %}
+            <li>ERROR: receipt.items is not iterable (type: {{ receipt.items.__class__.__name__ }})</li>
+        {% endif %}
+    {% else %}
+        <li>No items found or receipt.items is None/False</li>
+    {% endif %}
+    </ul>
+
+    <h2>Type Information:</h2>
+    <p>receipt type: {{ receipt.__class__.__name__ }}</p>
+    <p>receipt.items type: {{ receipt.items.__class__.__name__ if receipt.items else 'None' }}</p>
+    <p>receipt.items callable: {{ callable(receipt.items) if receipt.items else 'N/A' }}</p>
+    <p>receipt.items is method: {{ inspect.ismethod(receipt.items) if receipt.items else 'N/A' }}</p>
+
+    <h2>Raw receipt.items:</h2>
+    <pre>{{ receipt.items }}</pre>
+
+    <h2>If it's callable, let's call it:</h2>
+    {% if receipt.items and callable(receipt.items) %}
+        {% set items_result = receipt.items() %}
+        <p>Calling receipt.items() gives: {{ items_result.__class__.__name__ }}</p>
+        <ul>
+        {% for item in items_result %}
+            <li>{{ item }}</li>
+        {% endfor %}
+        </ul>
+    {% endif %}
+</body>
+</html>

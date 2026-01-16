@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt #{{ receipt.receipt_number }}</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 300px;
+            margin: 0 auto;
+            padding: 10px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .store-name {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .store-address {
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        .receipt-info {
+            margin-bottom: 15px;
+        }
+        .receipt-info div {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+        }
+        .items-table {
+            width: 100%;
+            margin: 15px 0;
+            border-collapse: collapse;
+        }
+        .items-table th {
+            text-align: left;
+            border-bottom: 1px dashed #000;
+            padding: 5px 0;
+        }
+        .items-table td {
+            padding: 3px 0;
+        }
+        .items-table .right {
+            text-align: right;
+        }
+        .totals {
+            margin-top: 15px;
+            border-top: 1px dashed #000;
+            padding-top: 10px;
+        }
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        .total-row.total {
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 12px;
+        }
+        .customer-info {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px dashed #000;
+        }
+        .print-button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+            font-size: 16px;
+        }
+        @media print {
+            .print-button {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="store-name">{{ company.store_name or "YOUR STORE" }}</div>
+        <div class="store-address">
+            {{ company.store_address or "123 Main Street" }}<br>
+            {{ company.store_city or "City, State 12345" }}<br>
+            Phone: {{ company.store_phone or "(123) 456-7890" }}
+        </div>
+    </div>
+
+    <div class="receipt-info">
+        <div>
+            <span>Receipt #:</span>
+            <span>{{ receipt.receipt_number }}</span>
+        </div>
+        <div>
+            <span>Date:</span>
+            <span>{{ receipt.created_at }}</span>
+        </div>
+        {% if receipt.customer %}
+        <div>
+            <span>Customer:</span>
+            <span>{{ receipt.customer }}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>Qty</th>
+                <th class="right">Price</th>
+                <th class="right">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- FIXED: Changed receipt.items to receipt.receipt_items -->
+            {% for item in receipt.receipt_items %}
+            <tr>
+                <td>{{ item.name }}</td>
+                <td>{{ item.quantity }}</td>
+                <td class="right">{{ format_naira(item.price) if format_naira else "₦{:.2f}".format(item.price) }}</td>
+                <td class="right">{{ format_naira(item.total) if format_naira else "₦{:.2f}".format(item.total) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="totals">
+        <div class="total-row">
+            <span>Subtotal:</span>
+            <span>{{ format_naira(receipt.subtotal) if format_naira else "₦{:.2f}".format(receipt.subtotal) }}</span>
+        </div>
+        {% if receipt.tax_amount > 0 %}
+        <div class="total-row">
+            <span>Tax:</span>
+            <span>{{ format_naira(receipt.tax_amount) if format_naira else "₦{:.2f}".format(receipt.tax_amount) }}</span>
+        </div>
+        {% endif %}
+        {% if receipt.discount_amount > 0 %}
+        <div class="total-row">
+            <span>Discount:</span>
+            <span>-{{ format_naira(receipt.discount_amount) if format_naira else "₦{:.2f}".format(receipt.discount_amount) }}</span>
+        </div>
+        {% endif %}
+        <div class="total-row total">
+            <span>TOTAL:</span>
+            <span>{{ format_naira(receipt.total_amount) if format_naira else "₦{:.2f}".format(receipt.total_amount) }}</span>
+        </div>
+        <div class="total-row">
+            <span>Payment:</span>
+            <span>{{ receipt.payment_method|title }}</span>
+        </div>
+        {% if receipt.amount_paid %}
+        <div class="total-row">
+            <span>Amount Paid:</span>
+            <span>{{ format_naira(receipt.amount_paid) if format_naira else "₦{:.2f}".format(receipt.amount_paid) }}</span>
+        </div>
+        {% endif %}
+        {% if receipt.change_amount %}
+        <div class="total-row">
+            <span>Change:</span>
+            <span>{{ format_naira(receipt.change_amount) if format_naira else "₦{:.2f}".format(receipt.change_amount) }}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="footer">
+        Thank you for your business!<br>
+        ---------------------------------<br>
+        <small>Receipt ID: {{ receipt.receipt_number }}</small><br>
+        <small>This is a reprint of original receipt</small>
+    </div>
+
+    <button class="print-button" onclick="window.print()">Print Receipt</button>
+</body>
+</html>
