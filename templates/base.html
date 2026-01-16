@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() if csrf_token else '' }}">
-    <title>{% block title %}POS System{% endblock %}</title>
+    <title>{% block title %}POS System{% endblock %}</title>  <!-- ONLY ONE HERE -->
 
     <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💰</text></svg>">
@@ -157,7 +157,183 @@
 
     <!-- Global JavaScript Utilities -->
     <script>
-        // ... [Keep all your existing JavaScript functions from before] ...
+        // Naira currency formatter
+        function formatNaira(amount) {
+            if (amount === null || amount === undefined) return '₦0.00';
+            const num = parseFloat(amount);
+            if (isNaN(num)) return '₦0.00';
+
+            // Format with commas for thousands and 2 decimal places
+            return '₦' + num.toLocaleString('en-NG', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        }
+
+        // Simple number formatter
+        function formatNumber(num) {
+            const parsed = parseFloat(num);
+            if (isNaN(parsed)) return '0';
+            return parsed.toLocaleString('en-NG');
+        }
+
+        // Extract numeric value from Naira string
+        function parseNaira(nairaString) {
+            if (!nairaString) return 0;
+            const cleaned = nairaString.replace(/[^0-9.-]+/g, '');
+            return parseFloat(cleaned) || 0;
+        }
+
+        // CSRF Token Helper
+        function getCSRFToken() {
+            // From meta tag
+            const metaTag = document.querySelector('meta[name="csrf-token"]');
+            if (metaTag && metaTag.content) return metaTag.content;
+
+            // From cookie (common Flask pattern)
+            const cookieValue = document.cookie
+                .split('; ')
+                .find(row => row.startsWith('csrf_token='))
+                ?.split('=')[1];
+
+            return cookieValue || '';
+        }
+
+        // Toast Notification System
+        function showToast(message, type = 'info', duration = 3000) {
+            // Remove existing toasts
+            document.querySelectorAll('.toast').forEach(toast => {
+                if (!toast.classList.contains('hiding')) {
+                    toast.classList.add('hiding');
+                    setTimeout(() => toast.remove(), 300);
+                }
+            });
+
+            // Create new toast
+            const toast = document.createElement('div');
+            toast.className = `toast px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 ${
+                type === 'success' ? 'bg-green-500 text-white' :
+                type === 'error' ? 'bg-red-500 text-white' :
+                type === 'warning' ? 'bg-yellow-500 text-white' :
+                'bg-blue-500 text-white'
+            }`;
+
+            // Add icon based on type
+            const icon = type === 'success' ? 'fa-check-circle' :
+                        type === 'error' ? 'fa-exclamation-circle' :
+                        type === 'warning' ? 'fa-exclamation-triangle' :
+                        'fa-info-circle';
+
+            toast.innerHTML = `
+                <i class="fas ${icon}"></i>
+                <span>${message}</span>
+            `;
+
+            document.body.appendChild(toast);
+
+            // Auto remove after duration
+            setTimeout(() => {
+                toast.classList.add('hiding');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+
+            // Click to dismiss
+            toast.addEventListener('click', () => {
+                toast.classList.add('hiding');
+                setTimeout(() => toast.remove(), 300);
+            });
+        }
+
+        // Confirmation Dialog
+        function showConfirm(message, callback) {
+            if (window.confirm(message)) {
+                if (typeof callback === 'function') {
+                    callback();
+                }
+                return true;
+            }
+            return false;
+        }
+
+        // Debounce function for search/input events
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Format Date for receipts
+        function formatDate(date, includeTime = true) {
+            const d = date instanceof Date ? date : new Date(date);
+            const options = {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            };
+
+            if (includeTime) {
+                options.hour = '2-digit';
+                options.minute = '2-digit';
+            }
+
+            return d.toLocaleDateString('en-NG', options);
+        }
+
+        // HTML Escape for security
+        function escapeHTML(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // API Request Helper
+        async function apiRequest(url, options = {}) {
+            const defaultOptions = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCSRFToken()
+                },
+                credentials: 'same-origin'
+            };
+
+            const mergedOptions = {
+                ...defaultOptions,
+                ...options,
+                headers: {
+                    ...defaultOptions.headers,
+                    ...options.headers
+                }
+            };
+
+            try {
+                const response = await fetch(url, mergedOptions);
+
+                // Handle HTTP errors
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                // Parse JSON response
+                const data = await response.json();
+
+                // Check for application-level errors
+                if (data && data.success === false) {
+                    throw new Error(data.message || 'Operation failed');
+                }
+
+                return data;
+            } catch (error) {
+                console.error('API Request Error:', error);
+                throw error;
+            }
+        }
 
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', function() {
@@ -227,336 +403,71 @@
                 }
             });
 
-            // ... [Keep rest of your initialization code] ...
+            // Format all money elements on page
+            document.querySelectorAll('.money').forEach(el => {
+                const amount = el.textContent.replace(/[^0-9.-]+/g, '');
+                if (amount) {
+                    el.textContent = formatNaira(amount);
+                }
+            });
+
+            // Convert all data-price attributes
+            document.querySelectorAll('[data-price]').forEach(el => {
+                const price = el.getAttribute('data-price');
+                if (price) {
+                    el.setAttribute('data-price-naira', formatNaira(price));
+                }
+            });
+
+            // Auto-focus first input in forms
+            const firstInput = document.querySelector('form:not([novalidate]) input:not([type="hidden"]):not([disabled])');
+            if (firstInput && !firstInput.value) {
+                setTimeout(() => firstInput.focus(), 100);
+            }
+
+            // Handle form submissions with loading states
+            document.querySelectorAll('form').forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    const submitBtn = this.querySelector('button[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.classList.add('disabled');
+                        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Processing...';
+                    }
+                });
+            });
+
+            // Handle tab navigation
+            document.addEventListener('keydown', function(e) {
+                // Ctrl + P for print
+                if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+                    e.preventDefault();
+                    window.print();
+                    return false;
+                }
+
+                // Ctrl + Enter for form submission
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    const activeForm = document.querySelector('form:focus-within');
+                    if (activeForm) {
+                        activeForm.dispatchEvent(new Event('submit'));
+                    }
+                }
+            });
         });
-    </script>
-</head>
-<body class="bg-gray-100">
-    <!-- Mobile Menu Button - FIXED: No extra space -->
-    <button id="mobile-menu-btn" class="lg:hidden fixed top-3 left-3 z-50 bg-white p-2 rounded-lg shadow-md border border-gray-200">
-        <i class="fas fa-bars text-lg text-indigo-600"></i>
-    </button>
 
-    <!-- Sidebar Overlay (Mobile only) -->
-    <div id="sidebar-overlay" class="sidebar-overlay lg:hidden"></div>
+        // Error boundary for unhandled errors
+        window.addEventListener('error', function(e) {
+            console.error('Unhandled error:', e.error);
+            showToast('An unexpected error occurred', 'error');
+        });
 
-    <!-- Sidebar -->
-    <div id="sidebar" class="sidebar fixed inset-y-0 left-0 w-64 bg-white shadow-lg lg:shadow-none lg:relative lg:translate-x-0 transition-transform duration-300">
-        <div class="p-4 lg:p-6 border-b relative">
-            <h1 class="text-lg lg:text-2xl font-bold text-indigo-600">
-                <i class="fas fa-cash-register mr-2"></i>Stinet Sales Point
-            </h1>
-            <p class="text-xs lg:text-sm text-gray-500 mt-1">Point of Sale System</p>
+        // Handle offline/online status
+        window.addEventListener('offline', () => {
+            showToast('You are offline. Some features may not work.', 'warning');
+        });
 
-            <!-- Mobile close button -->
-            <button class="mobile-close-btn lg:hidden absolute top-3 right-3 text-gray-500 hover:text-gray-700">
-                <i class="fas fa-times text-lg"></i>
-            </button>
-        </div>
-
-        <nav class="mt-4">
-            <a href="/" class="sidebar-item block px-4 lg:px-6 py-3 text-gray-700 hover:bg-gray-50 {% if request.path == '/' %}active bg-indigo-600 text-white{% endif %}">
-                <i class="fas fa-home mr-3"></i> <span class="mobile-text-sm">Dashboard</span>
-            </a>
-            <a href="/pos" class="sidebar-item block px-4 lg:px-6 py-3 text-gray-700 hover:bg-gray-50 {% if request.path == '/pos' %}active bg-indigo-600 text-white{% endif %}">
-                <i class="fas fa-shopping-cart mr-3"></i> <span class="mobile-text-sm">Point of Sale</span>
-            </a>
-            <a href="/products" class="sidebar-item block px-4 lg:px-6 py-3 text-gray-700 hover:bg-gray-50 {% if request.path == '/products' %}active bg-indigo-600 text-white{% endif %}">
-                <i class="fas fa-boxes mr-3"></i> <span class="mobile-text-sm">Products</span>
-            </a>
-            <a href="/inventory" class="sidebar-item block px-4 lg:px-6 py-3 text-gray-700 hover:bg-gray-50 {% if request.path == '/inventory' %}active bg-indigo-600 text-white{% endif %}">
-                <i class="fas fa-chart-bar mr-3"></i> <span class="mobile-text-sm">Inventory</span>
-            </a>
-            <a href="/sales" class="sidebar-item block px-4 lg:px-6 py-3 text-gray-700 hover:bg-gray-50 {% if request.path == '/sales' %}active bg-indigo-600 text-white{% endif %}">
-                <i class="fas fa-receipt mr-3"></i> <span class="mobile-text-sm">Sales</span>
-            </a>
-
-            {% if session.role == 'admin' %}
-            <a href="/settings" class="sidebar-item block px-4 lg:px-6 py-3 text-gray-700 hover:bg-gray-50 {% if request.path == '/settings' %}active bg-indigo-600 text-white{% endif %}">
-                <i class="fas fa-cog mr-3"></i> <span class="mobile-text-sm">Settings</span>
-            </a>
-            {% endif %}
-
-            {% if session.get('username') %}
-            <a href="/logout" class="sidebar-item block px-4 lg:px-6 py-3 text-red-600 hover:bg-red-50">
-                <i class="fas fa-sign-out-alt mr-3"></i> <span class="mobile-text-sm">Logout</span>
-            </a>
-            {% endif %}
-        </nav>
-
-        <!-- User Info -->
-        {% if session.get('username') %}
-        <div class="absolute bottom-0 w-64 p-3 lg:p-6 border-t">
-            <div class="flex items-center">
-                <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-user text-indigo-600 text-sm"></i>
-                </div>
-                <div class="ml-3 min-w-0">
-                    <p class="text-sm font-medium truncate">{{ session.get('full_name') }}</p>
-                    <p class="text-xs text-gray-500 truncate">{{ session.get('role')|title }}</p>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-
-    <!-- Main Content - FIXED: Adjusted for mobile menu button -->
-    <div class="flex-1 flex flex-col lg:ml-64 min-h-screen">
-        <!-- Header - FIXED: Added top padding for mobile menu button -->
-        <header class="bg-white shadow-sm px-4 lg:px-6 py-3 lg:py-4 mt-12 lg:mt-0">
-            <div class="flex justify-between items-center">
-                <div class="min-w-0">
-                    <h2 class="text-base lg:text-xl font-semibold text-gray-800 truncate">{% block page_title %}Dashboard{% endblock %}</h2>
-                    <p class="text-xs lg:text-sm text-gray-500 truncate">{% block page_subtitle %}Overview and quick actions{% endblock %}</p>
-                </div>
-                <div class="flex items-center space-x-2 lg:space-x-4">
-                    {% if session.get('username') %}
-                    <div class="text-xs lg:text-sm text-gray-600 mobile-hide lg:block">
-                        <i class="fas fa-user mr-1"></i> {{ session.get('username') }}
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </header>
-
-        <!-- Page Content - FIXED: Removed extra top padding -->
-        <main class="flex-1 overflow-y-auto p-4 lg:p-6">
-            {% block content %}{% endblock %}
-        </main>
-    </div>
-
-    {% block scripts %}{% endblock %}
-</body>
-</html><!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="{{ csrf_token() if csrf_token else '' }}">
-    <title>{% block title %}POS System{% endblock %}</title>
-
-    <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💰</text></svg>">
-
-    <!-- Tailwind CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <!-- Custom CSS -->
-    <style>
-        /* Base Styles */
-        :root {
-            --primary-color: #4f46e5;
-            --primary-dark: #4338ca;
-            --success-color: #10b981;
-            --danger-color: #ef4444;
-            --warning-color: #f59e0b;
-        }
-
-        /* Responsive Sidebar */
-        .sidebar {
-            transform: translateX(-100%);
-            transition: transform 0.3s ease;
-            z-index: 40;
-        }
-        .sidebar.active {
-            transform: translateX(0);
-        }
-        @media (min-width: 1024px) {
-            .sidebar {
-                transform: translateX(0);
-            }
-        }
-
-        .sidebar-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 30;
-        }
-        .sidebar-overlay.active {
-            display: block;
-        }
-
-        .sidebar-item.active {
-            background-color: var(--primary-color);
-            color: white;
-        }
-        .sidebar-item:hover:not(.active) {
-            background-color: #f3f4f6;
-        }
-
-        /* Money Display */
-        .money {
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        }
-
-        /* Animations */
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes slideOut {
-            from { transform: translateX(0); opacity: 1; }
-            to { transform: translateX(100%); opacity: 0; }
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        /* Toast Notification */
-        .toast {
-            position: fixed;
-            top: 1rem;
-            right: 1rem;
-            z-index: 9999;
-            animation: slideIn 0.3s ease;
-        }
-        .toast.hiding {
-            animation: slideOut 0.3s ease;
-        }
-
-        /* Loading States */
-        .loading {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-
-        /* Cart Item Animation */
-        .cart-item {
-            animation: fadeIn 0.3s ease;
-        }
-
-        /* Modal Backdrop */
-        .modal-backdrop {
-            backdrop-filter: blur(4px);
-        }
-
-        /* Mobile Responsive Adjustments */
-        @media (max-width: 768px) {
-            .mobile-text-sm {
-                font-size: 0.875rem;
-            }
-            .mobile-text-xs {
-                font-size: 0.75rem;
-            }
-            .mobile-p-2 {
-                padding: 0.5rem;
-            }
-            .mobile-hide {
-                display: none !important;
-            }
-            .mobile-block {
-                display: block !important;
-            }
-            .mobile-w-full {
-                width: 100% !important;
-            }
-
-            /* Better touch targets */
-            button, a {
-                min-height: 44px;
-                min-width: 44px;
-            }
-
-            /* Remove hover effects on mobile */
-            .hover\\:bg-gray-50:hover {
-                background-color: inherit;
-            }
-        }
-
-        /* Ensure content fits mobile screen */
-        html, body {
-            height: 100%;
-            overflow-x: hidden;
-        }
-
-        /* Better scroll behavior */
-        * {
-            -webkit-overflow-scrolling: touch;
-        }
-    </style>
-
-    <!-- Global JavaScript Utilities -->
-    <script>
-        // ... [Keep all your existing JavaScript functions from before] ...
-
-        // Initialize when page loads
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('POS System initialized');
-
-            // Mobile sidebar toggle
-            const menuBtn = document.getElementById('mobile-menu-btn');
-            const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('sidebar-overlay');
-            const closeBtn = sidebar?.querySelector('.mobile-close-btn');
-
-            // Toggle sidebar
-            if (menuBtn && sidebar) {
-                menuBtn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    sidebar.classList.toggle('active');
-                    if (overlay) overlay.classList.toggle('active');
-                });
-            }
-
-            // Close sidebar
-            if (closeBtn) {
-                closeBtn.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    sidebar.classList.remove('active');
-                    if (overlay) overlay.classList.remove('active');
-                });
-            }
-
-            // Close on overlay click
-            if (overlay) {
-                overlay.addEventListener('click', function() {
-                    sidebar.classList.remove('active');
-                    overlay.classList.remove('active');
-                });
-            }
-
-            // Close sidebar when clicking outside on mobile
-            document.addEventListener('click', function(event) {
-                if (window.innerWidth < 1024) {
-                    if (sidebar && sidebar.classList.contains('active') &&
-                        !sidebar.contains(event.target) &&
-                        menuBtn && !menuBtn.contains(event.target)) {
-                        sidebar.classList.remove('active');
-                        if (overlay) overlay.classList.remove('active');
-                    }
-                }
-            });
-
-            // Auto-close sidebar on navigation (mobile)
-            document.querySelectorAll('.sidebar-item').forEach(item => {
-                item.addEventListener('click', function() {
-                    if (window.innerWidth < 1024) {
-                        setTimeout(() => {
-                            if (sidebar) sidebar.classList.remove('active');
-                            if (overlay) overlay.classList.remove('active');
-                        }, 300);
-                    }
-                });
-            });
-
-            // Close sidebar on window resize to desktop
-            window.addEventListener('resize', function() {
-                if (window.innerWidth >= 1024) {
-                    if (sidebar) sidebar.classList.remove('active');
-                    if (overlay) overlay.classList.remove('active');
-                }
-            });
-
-            // ... [Keep rest of your initialization code] ...
+        window.addEventListener('online', () => {
+            showToast('Back online!', 'success');
         });
     </script>
 </head>
