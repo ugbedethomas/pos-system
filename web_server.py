@@ -294,6 +294,12 @@ def require_login():
 # Login page
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # ADD THE PING ENDPOINT HERE
+    @app.route('/ping')
+    def ping():
+        """Ultra-lightweight ping endpoint to keep app awake"""
+        return 'pong', 200
+
     # Try to auto-initialize database if needed
     try:
         db = SessionLocal()
