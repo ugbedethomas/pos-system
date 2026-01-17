@@ -294,12 +294,6 @@ def require_login():
 # Login page
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # ADD THE PING ENDPOINT HERE
-    @app.route('/ping')
-    def ping():
-        """Ultra-lightweight ping endpoint to keep app awake"""
-        return 'pong', 200
-
     # Try to auto-initialize database if needed
     try:
         db = SessionLocal()
@@ -373,6 +367,12 @@ def login():
             return render_template('login.html', error='Invalid username or password')
 
     return render_template('login.html')
+
+# MOVE THE PING ENDPOINT OUTSIDE THE LOGIN FUNCTION - HERE!
+@app.route('/ping')
+def ping():
+    """Ultra-lightweight ping endpoint to keep app awake"""
+    return 'pong', 200
 
 
 @app.route('/create-inventory-test-user')
