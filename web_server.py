@@ -99,7 +99,7 @@ def initialize_database_on_startup():
 
 
 # Call this function when the app starts
-initialize_database_on_startup()
+# initialize_database_on_startup()
 
 @app.route('/force-init-db')
 def force_init_db():
@@ -292,7 +292,7 @@ def require_login():
 
 
 # Login page
-@app.route('/login', methods=['GET', 'POST'])@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     # Try to auto-initialize database if needed
     try:
