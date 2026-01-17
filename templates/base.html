@@ -156,6 +156,76 @@
             border-color: var(--danger-color);
             box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
         }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 1024px) {
+            /* Mobile menu button */
+            #mobile-menu-btn {
+                display: block !important;
+            }
+
+            /* Hide sidebar by default on mobile */
+            .sidebar-container {
+                position: fixed;
+                left: -100%;
+                top: 0;
+                bottom: 0;
+                z-index: 50;
+                transition: left 0.3s ease;
+            }
+            .sidebar-container.active {
+                left: 0;
+            }
+
+            /* Overlay when sidebar is open */
+            .sidebar-overlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 40;
+            }
+            .sidebar-overlay.active {
+                display: block;
+            }
+
+            /* Main content takes full width on mobile */
+            .main-content {
+                margin-left: 0 !important;
+                width: 100% !important;
+            }
+
+            /* Adjust header for mobile */
+            .main-header {
+                padding: 0.75rem 1rem !important;
+            }
+
+            /* Adjust main content padding */
+            .main-content-area {
+                padding: 0.75rem !important;
+            }
+
+            /* Better text sizes for mobile */
+            .mobile-text-sm {
+                font-size: 0.875rem !important;
+            }
+            .mobile-text-xs {
+                font-size: 0.75rem !important;
+            }
+        }
+
+        @media (min-width: 1025px) {
+            /* Hide mobile menu button on desktop */
+            #mobile-menu-btn {
+                display: none !important;
+            }
+
+            /* Show sidebar on desktop */
+            .sidebar-container {
+                position: relative !important;
+                left: 0 !important;
+            }
+        }
     </style>
 
     <!-- Global JavaScript Utilities -->
@@ -342,6 +412,50 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log('POS System initialized');
 
+            // Mobile sidebar toggle
+            const menuBtn = document.getElementById('mobile-menu-btn');
+            const sidebar = document.getElementById('sidebar-container');
+            const overlay = document.getElementById('sidebar-overlay');
+            const closeBtn = document.querySelector('.mobile-close-btn');
+
+            // Toggle sidebar on mobile
+            if (menuBtn && sidebar) {
+                menuBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    sidebar.classList.add('active');
+                    if (overlay) overlay.classList.add('active');
+                });
+            }
+
+            // Close sidebar
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    sidebar.classList.remove('active');
+                    if (overlay) overlay.classList.remove('active');
+                });
+            }
+
+            // Close on overlay click
+            if (overlay) {
+                overlay.addEventListener('click', function() {
+                    sidebar.classList.remove('active');
+                    overlay.classList.remove('active');
+                });
+            }
+
+            // Close sidebar when clicking outside on mobile
+            document.addEventListener('click', function(event) {
+                if (window.innerWidth < 1025) {
+                    if (sidebar && sidebar.classList.contains('active') &&
+                        !sidebar.contains(event.target) &&
+                        menuBtn && !menuBtn.contains(event.target)) {
+                        sidebar.classList.remove('active');
+                        if (overlay) overlay.classList.remove('active');
+                    }
+                }
+            });
+
             // Format all money elements on page
             document.querySelectorAll('.money').forEach(el => {
                 const amount = el.textContent.replace(/[^0-9.-]+/g, '');
@@ -392,6 +506,24 @@
                     }
                 }
             });
+
+            // Simple sidebar activation
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    document.querySelectorAll('.sidebar-item').forEach(i => {
+                        i.classList.remove('active', 'bg-indigo-600', 'text-white');
+                        i.classList.add('text-gray-700');
+                    });
+                    this.classList.add('active', 'bg-indigo-600', 'text-white');
+                    this.classList.remove('text-gray-700');
+
+                    // Close sidebar on mobile after clicking
+                    if (window.innerWidth < 1025) {
+                        if (sidebar) sidebar.classList.remove('active');
+                        if (overlay) overlay.classList.remove('active');
+                    }
+                });
+            });
         });
 
         // Error boundary for unhandled errors
@@ -411,58 +543,68 @@
     </script>
 </head>
 <body class="bg-gray-100">
+    <!-- Mobile Menu Button -->
+    <button id="mobile-menu-btn" class="fixed top-4 left-4 z-50 bg-white p-3 rounded-lg shadow-lg border border-gray-200 lg:hidden">
+        <i class="fas fa-bars text-xl text-indigo-600"></i>
+    </button>
+
+    <!-- Sidebar Overlay (Mobile only) -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
     <div class="flex h-screen">
-        <!-- Sidebar -->
-        <div class="w-64 bg-white shadow-lg">
-            <div class="p-6 border-b">
-                <h1 class="text-2xl font-bold text-indigo-600">
+        <!-- Sidebar Container -->
+        <div id="sidebar-container" class="sidebar-container w-64 bg-white shadow-lg">
+            <div class="p-4 lg:p-6 border-b relative">
+                <h1 class="text-xl lg:text-2xl font-bold text-indigo-600">
                     <i class="fas fa-cash-register mr-2"></i>Stinet Sales Point
                 </h1>
-                <p class="text-sm text-gray-500 mt-1">Point of Sale System</p>
+                <p class="text-xs lg:text-sm text-gray-500 mt-1">Point of Sale System</p>
+
+                <!-- Mobile close button -->
+                <button class="mobile-close-btn lg:hidden absolute top-3 right-3 text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
             </div>
 
             <nav class="mt-4">
-                <a href="/" class="sidebar-item block px-6 py-3 text-gray-700 {% if request.path == '/' %}active{% endif %}">
-                    <i class="fas fa-home mr-3"></i> Dashboard
+                <a href="/" class="sidebar-item block px-4 lg:px-6 py-3 text-gray-700 {% if request.path == '/' %}active{% endif %}">
+                    <i class="fas fa-home mr-3"></i> <span class="mobile-text-sm">Dashboard</span>
                 </a>
-                <a href="/pos" class="sidebar-item block px-6 py-3 text-gray-700 {% if request.path == '/pos' %}active{% endif %}">
-                    <i class="fas fa-shopping-cart mr-3"></i> Point of Sale
+                <a href="/pos" class="sidebar-item block px-4 lg:px-6 py-3 text-gray-700 {% if request.path == '/pos' %}active{% endif %}">
+                    <i class="fas fa-shopping-cart mr-3"></i> <span class="mobile-text-sm">Point of Sale</span>
                 </a>
-                <a href="/products" class="sidebar-item block px-6 py-3 text-gray-700 {% if request.path == '/products' %}active{% endif %}">
-                    <i class="fas fa-boxes mr-3"></i> Products
+                <a href="/products" class="sidebar-item block px-4 lg:px-6 py-3 text-gray-700 {% if request.path == '/products' %}active{% endif %}">
+                    <i class="fas fa-boxes mr-3"></i> <span class="mobile-text-sm">Products</span>
                 </a>
-                <a href="/inventory" class="sidebar-item block px-6 py-3 text-gray-700 {% if request.path == '/inventory' %}active{% endif %}">
-                    <i class="fas fa-chart-bar mr-3"></i> Inventory
+                <a href="/inventory" class="sidebar-item block px-4 lg:px-6 py-3 text-gray-700 {% if request.path == '/inventory' %}active{% endif %}">
+                    <i class="fas fa-chart-bar mr-3"></i> <span class="mobile-text-sm">Inventory</span>
                 </a>
-                <a href="/sales" class="sidebar-item block px-6 py-3 text-gray-700 {% if request.path == '/sales' %}active{% endif %}">
-                    <i class="fas fa-receipt mr-3"></i> Sales
+                <a href="/sales" class="sidebar-item block px-4 lg:px-6 py-3 text-gray-700 {% if request.path == '/sales' %}active{% endif %}">
+                    <i class="fas fa-receipt mr-3"></i> <span class="mobile-text-sm">Sales</span>
                 </a>
-                {% if session.get('username') %}
-                <a href="/logout" class="sidebar-item block px-6 py-3 text-red-600">
-                    <i class="fas fa-sign-out-alt mr-3"></i> Logout
+
+                {% if session.role == 'admin' %}
+                <a href="/settings" class="sidebar-item block px-4 lg:px-6 py-3 text-gray-700 {% if request.path == '/settings' %}active{% endif %}">
+                    <i class="fas fa-cog mr-3"></i> <span class="mobile-text-sm">Settings</span>
                 </a>
                 {% endif %}
-                <!-- In your base.html navigation -->
-{% if session.role == 'admin' %}
-<li class="mb-2">
-    <a href="/settings"
-       class="flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-gray-100 {% if request.path == '/settings' %}bg-gray-100 font-semibold{% endif %}">
-        <i class="fas fa-cog mr-3"></i>
-        <span>Settings</span>
-    </a>
-</li>
-{% endif %}
+
+                {% if session.get('username') %}
+                <a href="/logout" class="sidebar-item block px-4 lg:px-6 py-3 text-red-600">
+                    <i class="fas fa-sign-out-alt mr-3"></i> <span class="mobile-text-sm">Logout</span>
+                </a>
+                {% endif %}
             </nav>
 
             <!-- User Info -->
             {% if session.get('username') %}
-            <div class="absolute bottom-0 w-64 p-6 border-t">
+            <div class="absolute bottom-0 w-64 p-4 lg:p-6 border-t">
                 <div class="flex items-center">
                     <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                        <i class="fas fa-user text-indigo-600"></i>
+                        <i class="fas fa-user text-indigo-600 text-sm"></i>
                     </div>
                     <div class="ml-3">
-                        <p class="text-sm font-medium">{{ session.get('full_name') }}</p>
+                        <p class="text-sm font-medium mobile-text-sm">{{ session.get('full_name') }}</p>
                         <p class="text-xs text-gray-500">{{ session.get('role')|title }}</p>
                     </div>
                 </div>
@@ -471,17 +613,17 @@
         </div>
 
         <!-- Main Content -->
-        <div class="flex-1 flex flex-col overflow-hidden">
+        <div class="flex-1 flex flex-col overflow-hidden main-content">
             <!-- Header -->
-            <header class="bg-white shadow-sm px-6 py-4">
+            <header class="bg-white shadow-sm px-4 lg:px-6 py-4 main-header">
                 <div class="flex justify-between items-center">
-                    <div>
-                        <h2 class="text-xl font-semibold text-gray-800">{% block page_title %}Dashboard{% endblock %}</h2>
-                        <p class="text-gray-500 text-sm">{% block page_subtitle %}Overview and quick actions{% endblock %}</p>
+                    <div class="min-w-0">
+                        <h2 class="text-lg lg:text-xl font-semibold text-gray-800 truncate">{% block page_title %}Dashboard{% endblock %}</h2>
+                        <p class="text-gray-500 text-xs lg:text-sm truncate">{% block page_subtitle %}Overview and quick actions{% endblock %}</p>
                     </div>
-                    <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2 lg:space-x-4">
                         {% if session.get('username') %}
-                        <div class="text-sm text-gray-600">
+                        <div class="text-xs lg:text-sm text-gray-600">
                             <i class="fas fa-user mr-1"></i> {{ session.get('username') }}
                         </div>
                         {% endif %}
@@ -490,24 +632,12 @@
             </header>
 
             <!-- Page Content -->
-            <main class="flex-1 overflow-y-auto p-6">
+            <main class="flex-1 overflow-y-auto p-4 lg:p-6 main-content-area">
                 {% block content %}{% endblock %}
             </main>
         </div>
     </div>
 
-    <script>
-        // Simple sidebar activation
-        document.querySelectorAll('.sidebar-item').forEach(item => {
-            item.addEventListener('click', function() {
-                document.querySelectorAll('.sidebar-item').forEach(i => {
-                    i.classList.remove('active', 'bg-indigo-600', 'text-white');
-                    i.classList.add('text-gray-700');
-                });
-                this.classList.add('active', 'bg-indigo-600', 'text-white');
-                this.classList.remove('text-gray-700');
-            });
-        });
-    </script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>
