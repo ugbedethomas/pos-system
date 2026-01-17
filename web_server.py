@@ -41,6 +41,66 @@ def escapejs(value):
 app.jinja_env.filters['escapejs'] = escapejs
 
 
+# Auto-initialize database on startup
+def initialize_database_on_startup():
+    try:
+        from app.database import Base, engine, SessionLocal
+        from app.auth import get_password_hash
+        from app.models import User
+
+        print("🔍 Checking if database needs initialization...")
+
+        # Try to connect to database
+        db = SessionLocal()
+        try:
+            # Test if users table exists
+            db.execute("SELECT 1 FROM users LIMIT 1")
+            print("✅ Database already initialized")
+            db.close()
+            return
+        except Exception:
+            print("🔄 Database not found. Creating tables...")
+            db.close()
+
+        # Create all tables
+        Base.metadata.create_all(bind=engine)
+
+        # Create default users
+        db = SessionLocal()
+
+        users_to_create = [
+            ("admin", "admin123", "admin", "System Administrator"),
+            ("cashier", "cashier123", "cashier", "Cashier User"),
+            ("inventory", "inventory123", "inventory", "Inventory Manager")
+        ]
+
+        for username, password, role, full_name in users_to_create:
+            existing = db.query(User).filter(User.username == username).first()
+            if not existing:
+                user = User(
+                    username=username,
+                    email=f"{username}@pos.com",
+                    hashed_password=get_password_hash(password),
+                    role=role,
+                    full_name=full_name,
+                    is_active=True
+                )
+                db.add(user)
+                print(f"  ✅ Created user: {username}")
+
+        db.commit()
+        db.close()
+        print("🎉 Database initialized successfully on startup!")
+
+    except Exception as e:
+        print(f"⚠️ Startup initialization failed: {e}")
+        import traceback
+        print(traceback.format_exc())
+
+
+# Call this function when the app starts
+initialize_database_on_startup()
+
 @app.route('/force-init-db')
 def force_init_db():
     """Initialize database WITHOUT login requirement"""
@@ -232,39 +292,77 @@ def require_login():
 
 
 # Login page
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['GET', 'POST'])@app.route('/login', methods=['GET', 'POST'])
 def login():
+    # Try to auto-initialize database if needed
+    try:
+        db = SessionLocal()
+        # Test if users table exists by trying a simple query
+        db.execute("SELECT 1 FROM users LIMIT 1")
+        db.close()
+    except Exception as e:
+        # Database not initialized - auto-initialize it
+        print(f"⚠️ Database not initialized. Auto-initializing... Error: {e}")
+        try:
+            from app.database import Base, engine, SessionLocal
+            from app.auth import get_password_hash
+            import traceback
+
+            print("🔄 Creating database tables...")
+            Base.metadata.create_all(bind=engine)
+
+            # Create default users
+            db = SessionLocal()
+            from app.models import User
+
+            users_to_create = [
+                ("admin", "admin123", "admin", "System Administrator"),
+                ("cashier", "cashier123", "cashier", "Cashier User"),
+                ("inventory", "inventory123", "inventory", "Inventory Manager")
+            ]
+
+            for username, password, role, full_name in users_to_create:
+                existing = db.query(User).filter(User.username == username).first()
+                if not existing:
+                    user = User(
+                        username=username,
+                        email=f"{username}@pos.com",
+                        hashed_password=get_password_hash(password),
+                        role=role,
+                        full_name=full_name,
+                        is_active=True
+                    )
+                    db.add(user)
+
+            db.commit()
+            db.close()
+            print("✅ Database auto-initialized successfully!")
+
+        except Exception as init_error:
+            print(f"❌ Auto-initialization failed: {init_error}")
+            print(traceback.format_exc())
+            # Continue to login page - user will see error if they try to login
+
+    # Now handle the login request normally
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-
-        print(f"\n🔐 LOGIN ATTEMPT - Username: {username}")
 
         db = SessionLocal()
         user = authenticate_user(db, username, password)
 
         if user:
-            print(f"✅ USER FOUND - ID: {user.id}, Username: {user.username}")
-            print(f"📋 USER DETAILS - Role: '{user.role}', Name: {user.full_name}")
-
-            # Create session
             session['user_id'] = user.id
             session['username'] = user.username
             session['role'] = user.role
             session['full_name'] = user.full_name
 
-            # DEBUG: Verify session was set
-            print(f"💾 SESSION SET - Role in session: '{session.get('role')}'")
-
-            # Update last login
             user.last_login = datetime.now()
             db.commit()
             db.close()
 
-            print(f"🔄 REDIRECTING to dashboard...\n")
             return redirect('/')
         else:
-            print(f"❌ AUTH FAILED - Invalid credentials for: {username}\n")
             db.close()
             return render_template('login.html', error='Invalid username or password')
 
