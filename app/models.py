@@ -1,26 +1,47 @@
-﻿from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.database import Base
+from app.database import Base  # or db if using Flask-SQLAlchemy
+from datetime import datetime
 
+# Use ONE of these approaches:
 
+# APPROACH 1: If using SQLAlchemy declarative_base (Base)
 class Product(Base):
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    description = Column(String(500))
+    description = Column(Text)
     price = Column(Float, nullable=False)
+    cost_price = Column(Float, default=0.0)
     stock_quantity = Column(Integer, default=0)
     category = Column(String(100), default="Uncategorized")
     sku = Column(String(50), unique=True)
+    barcode = Column(String(100), unique=True, nullable=True)
+    reorder_level = Column(Integer, default=10)  # This is what you should use
+    location = Column(String(100), nullable=True)
+    supplier_name = Column(String(255), nullable=True)
+    supplier_code = Column(String(100), nullable=True)
+    image_url = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     is_active = Column(Boolean, default=True)
-    min_stock_level = Column(Integer, default=10)
 
-    # Relationship to sale items
+    # Relationships
     sale_items = relationship("SaleItem", back_populates="product")
+    cart_items = relationship("CartItem", back_populates="product")
 
+
+# APPROACH 2: If using Flask-SQLAlchemy (db.Model)
+# from app.database import db  # Make sure you import db
+#
+# class Product(db.Model):
+#     __tablename__ = "products"
+#
+#     id = db.Column(db.Integer, primary_key=True, index=True)
+#     name = db.Column(db.String(255), nullable=False)
+#     # ... same column definitions but with db.Column ...
 
 class Customer(Base):
     __tablename__ = "customers"
@@ -29,9 +50,9 @@ class Customer(Base):
     name = Column(String(255))
     phone = Column(String(50))
     email = Column(String(255))
+    address = Column(Text, nullable=True)
     created_at = Column(DateTime, default=func.now())
 
-    # Relationship to sales
     sales = relationship("Sale", back_populates="customer")
 
 
@@ -43,14 +64,18 @@ class Sale(Base):
     total_amount = Column(Float, nullable=False)
     tax_amount = Column(Float, default=0)
     discount_amount = Column(Float, default=0)
-    payment_method = Column(String(50))  # cash, card, mobile
-    payment_status = Column(String(50), default="completed")  # completed, pending, cancelled
-    customer_id = Column(Integer, ForeignKey("customers.id"))
+    amount_paid = Column(Float, nullable=False)
+    change_amount = Column(Float, default=0)
+    payment_method = Column(String(50))
+    payment_status = Column(String(50), default="completed")
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=func.now())
+    notes = Column(Text, nullable=True)
 
-    # Relationships
     customer = relationship("Customer", back_populates="sales")
     items = relationship("SaleItem", back_populates="sale")
+    user = relationship("User")
 
 
 class SaleItem(Base):
@@ -63,7 +88,6 @@ class SaleItem(Base):
     unit_price = Column(Float, nullable=False)
     subtotal = Column(Float, nullable=False)
 
-    # Relationships
     sale = relationship("Sale", back_populates="items")
     product = relationship("Product", back_populates="sale_items")
 
@@ -73,14 +97,13 @@ class StockMovement(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"))
-    quantity = Column(Integer, nullable=False)  # Positive = added, Negative = sold
-    movement_type = Column(String(50))  # 'purchase', 'sale', 'adjustment', 'return'
-    reference = Column(String(100))  # sale_id, purchase_order, etc.
+    quantity = Column(Integer, nullable=False)
+    movement_type = Column(String(50))
+    reference = Column(String(100))
     notes = Column(String(500))
     created_at = Column(DateTime, default=func.now())
     created_by = Column(String(100), default="system")
 
-    # Relationship
     product = relationship("Product")
 
 
@@ -92,7 +115,54 @@ class User(Base):
     full_name = Column(String(100))
     email = Column(String(100), unique=True)
     hashed_password = Column(String(255), nullable=False)
-    role = Column(String(20))  # admin, cashier, inventory
+    role = Column(String(20), default="cashier")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=func.now())
     last_login = Column(DateTime)
+
+    sales = relationship("Sale", back_populates="user")
+
+
+class Cart(Base):
+    __tablename__ = "carts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    session_id = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    is_active = Column(Boolean, default=True)
+
+    items = relationship("CartItem", back_populates="cart")
+    user = relationship("User")
+
+
+class CartItem(Base):
+    __tablename__ = "cart_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    cart_id = Column(Integer, ForeignKey("carts.id"))
+    product_id = Column(Integer, ForeignKey("products.id"))
+    quantity = Column(Integer, nullable=False, default=1)
+    price = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+
+    cart = relationship("Cart", back_populates="items")
+    product = relationship("Product", back_populates="cart_items")
+
+
+class Company(Base):
+    __tablename__ = "company"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    address = Column(Text)
+    phone = Column(String(50))
+    email = Column(String(100))
+    tax_id = Column(String(100), nullable=True)
+    tax_rate = Column(Float, default=0.075)
+    currency = Column(String(10), default="NGN")
+    receipt_footer = Column(Text, nullable=True)
+    logo_url = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

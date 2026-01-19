@@ -1115,58 +1115,58 @@ def api_get_product_by_barcode(barcode):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-@app.route('/api/cart', methods=['GET'])
-def api_get_cart():
-    """Get current cart contents"""
-    if 'user_id' not in session:
-        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+# @app.route('/api/cart', methods=['GET'])
+# def api_get_cart():
+#     """Get current cart contents"""
+#     if 'user_id' not in session:
+#         return jsonify({'success': False, 'message': 'Not authenticated'}), 401
 
-    cart = session.get('cart', [])
-    cart_total = sum(item['subtotal'] for item in cart)
+#     cart = session.get('cart', [])
+#     cart_total = sum(item['subtotal'] for item in cart)
 
-    return jsonify({
-        'success': True,
-        'cart_items': cart,
-        'cart_total': cart_total,
-        'cart_count': len(cart)
-    })
-
-
-@app.route('/api/cart/clear', methods=['POST'])
-def api_clear_cart():
-    """Clear the cart"""
-    if 'user_id' not in session:
-        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
-
-    session.pop('cart', None)
-    session.modified = True
-
-    return jsonify({
-        'success': True,
-        'message': 'Cart cleared'
-    })
+#     return jsonify({
+#         'success': True,
+#         'cart_items': cart,
+#         'cart_total': cart_total,
+#         'cart_count': len(cart)
+#     })
 
 
-@app.route('/api/cart/remove/<int:product_id>', methods=['POST'])
-def api_remove_from_cart(product_id):
-    """Remove item from cart"""
-    if 'user_id' not in session:
-        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+# @app.route('/api/cart/clear', methods=['POST'])
+# def api_clear_cart():
+#     """Clear the cart"""
+#     if 'user_id' not in session:
+#         return jsonify({'success': False, 'message': 'Not authenticated'}), 401
 
-    if 'cart' in session:
-        cart = session['cart']
-        session['cart'] = [item for item in cart if item['product_id'] != product_id]
-        session.modified = True
+#     session.pop('cart', None)
+#     session.modified = True
 
-    new_cart = session.get('cart', [])
+#     return jsonify({
+#         'success': True,
+#         'message': 'Cart cleared'
+#     })
 
-    return jsonify({
-        'success': True,
-        'message': 'Item removed from cart',
-        'cart_count': len(new_cart),
-        'cart_total': sum(item['subtotal'] for item in new_cart),
-        'cart_items': new_cart
-    })
+
+# @app.route('/api/cart/remove/<int:product_id>', methods=['POST'])
+# def api_remove_from_cart(product_id):
+#     """Remove item from cart"""
+#     if 'user_id' not in session:
+#         return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+#     if 'cart' in session:
+#         cart = session['cart']
+#         session['cart'] = [item for item in cart if item['product_id'] != product_id]
+#         session.modified = True
+
+#     new_cart = session.get('cart', [])
+
+#     return jsonify({
+#         'success': True,
+#         'message': 'Item removed from cart',
+#         'cart_count': len(new_cart),
+#         'cart_total': sum(item['subtotal'] for item in new_cart),
+#         'cart_items': new_cart
+#     })
 
 
 # In your product creation endpoint
@@ -1855,4 +1855,5 @@ if __name__ == '__main__':
         debug=debug_mode,
         threaded=True
     )
+
 

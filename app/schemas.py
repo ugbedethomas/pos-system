@@ -160,3 +160,26 @@ class InventoryReport(BaseModel):
     total_value: float
     status: str  # 'OK', 'LOW', 'OUT'
     last_movement: Optional[datetime] = None
+
+    # In app/schemas.py
+    class ProductBase(BaseModel):
+        name: str
+        sku: str
+        barcode: Optional[str] = None  # Add this
+        price: float
+        cost_price: Optional[float] = 0.0
+        stock_quantity: Optional[int] = 0
+        reorder_level: Optional[int] = 10
+        category: Optional[str] = "Uncategorized"
+        description: Optional[str] = ""
+
+    class ProductCreate(ProductBase):
+        pass
+
+    class Product(ProductBase):
+        id: int
+        created_at: datetime
+        updated_at: datetime
+
+        class Config:
+            orm_mode = True

@@ -276,7 +276,8 @@ def require_login():
         'static',
         'health',
         'force_init_db',
-        'init_now'  # ← ADD THIS LINE
+        'init_now',
+        'ping'  # Add ping to public routes
     ]
 
     # Also allow any route that starts with /force- or /init-
@@ -299,10 +300,42 @@ def login():
         db = SessionLocal()
         # Test if users table exists by trying a simple query
         db.execute("SELECT 1 FROM users LIMIT 1")
+
+        # Check if schema is complete
+        from sqlalchemy import inspect
+        inspector = inspect(db.get_bind())
+
+        # Check customers table has address column
+        if 'customers' in inspector.get_table_names():
+            customer_columns = [col['name'] for col in inspector.get_columns('customers')]
+            if 'address' not in customer_columns:
+                print("🔄 Adding missing columns to customers table...")
+                db.execute("ALTER TABLE customers ADD COLUMN address TEXT")
+
+        # Check products table has required columns
+        if 'products' in inspector.get_table_names():
+            product_columns = [col['name'] for col in inspector.get_columns('products')]
+            missing_columns = []
+
+            if 'cost_price' not in product_columns:
+                missing_columns.append("cost_price REAL DEFAULT 0")
+            if 'barcode' not in product_columns:
+                missing_columns.append("barcode TEXT")
+            if 'is_active' not in product_columns:
+                missing_columns.append("is_active BOOLEAN DEFAULT 1")
+
+            for col_def in missing_columns:
+                col_name = col_def.split()[0]
+                print(f"🔄 Adding missing column '{col_name}' to products table...")
+                db.execute(f"ALTER TABLE products ADD COLUMN {col_def}")
+
+        db.commit()
         db.close()
+
     except Exception as e:
         # Database not initialized - auto-initialize it
         print(f"⚠️ Database not initialized. Auto-initializing... Error: {e}")
+        # ... rest of your existing initialization code ...
         try:
             from app.database import Base, engine, SessionLocal
             from app.auth import get_password_hash
@@ -367,6 +400,7 @@ def login():
             return render_template('login.html', error='Invalid username or password')
 
     return render_template('login.html')
+
 
 # MOVE THE PING ENDPOINT OUTSIDE THE LOGIN FUNCTION - HERE!
 @app.route('/ping')
@@ -546,8 +580,12 @@ def products():
     db = SessionLocal()
     try:
         products = crud.get_products(db)
+        categories = list(set(p.category for p in products if p.category))
+
         return render_template('products.html',
                                products=products,
+                               categories=categories,
+                               company=COMPANY_SETTINGS,
                                format_naira=format_naira,
                                format_number=format_number
                                )
@@ -627,7 +665,8 @@ def api_products():
                 'stock_quantity': p.stock_quantity,
                 'category': p.category,
                 'sku': p.sku,
-                'description': p.description
+                'description': p.description,
+                'barcode': p.barcode if hasattr(p, 'barcode') else None
             })
         return jsonify(result)
     finally:
@@ -654,7 +693,8 @@ def api_create_product():
             price=float(data['price']),
             stock_quantity=int(data.get('stock_quantity', 0)),
             category=data.get('category', 'Uncategorized'),
-            description=data.get('description', '')
+            description=data.get('description', ''),
+            barcode=data.get('barcode')
         )
 
         product = crud.create_product(db, product_data)
@@ -666,7 +706,8 @@ def api_create_product():
             'price': float(product.price),
             'stock_quantity': product.stock_quantity,
             'category': product.category,
-            'description': product.description
+            'description': product.description,
+            'barcode': product.barcode
         })
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
@@ -687,9 +728,18 @@ def web_create_product():
         name = request.form.get('name')
         sku = request.form.get('sku')
         price = request.form.get('price')
+        barcode = request.form.get('barcode', '').strip() or None
 
         if not name or not sku or not price:
             return redirect('/products?error=Missing+required+fields')
+
+        # Check if barcode already exists
+        if barcode:
+            existing = db.query(models.Product).filter(
+                models.Product.barcode == barcode
+            ).first()
+            if existing:
+                return redirect(f'/products?error=Barcode+{barcode}+already+exists')
 
         product_data = schemas.ProductCreate(
             name=name,
@@ -697,7 +747,8 @@ def web_create_product():
             price=float(price),
             stock_quantity=int(request.form.get('stock_quantity', 0)),
             category=request.form.get('category', 'Uncategorized'),
-            description=request.form.get('description', '')
+            description=request.form.get('description', ''),
+            barcode=barcode
         )
 
         product = crud.create_product(db, product_data)
@@ -732,6 +783,7 @@ def edit_product(product_id):
             name = request.form.get('name')
             sku = request.form.get('sku')
             price = request.form.get('price')
+            barcode = request.form.get('barcode', '').strip() or None
 
             if not name or not sku or not price:
                 return redirect(f'/products/edit/{product_id}?error=Missing+required+fields')
@@ -750,9 +802,19 @@ def edit_product(product_id):
                 if existing:
                     return redirect(f'/products/edit/{product_id}?error=SKU+already+exists')
 
+            # Check if barcode is being changed and already exists
+            if barcode != product.barcode:
+                existing_barcode = db.query(models.Product).filter(
+                    models.Product.barcode == barcode,
+                    models.Product.id != product_id
+                ).first()
+                if existing_barcode:
+                    return redirect(f'/products/edit/{product_id}?error=Barcode+{barcode}+already+exists')
+
             # Update fields
             product.name = name
             product.sku = sku
+            product.barcode = barcode
             product.price = float(price)
             product.cost_price = float(request.form.get('cost_price', 0))
             product.category = request.form.get('category', 'Uncategorized')
@@ -798,14 +860,147 @@ def delete_product(product_id):
 # Cart Management Endpoints
 @app.route('/api/cart/add', methods=['POST'])
 def api_add_to_cart():
-    """Add item to cart"""
+    """Add item to cart by product_id OR barcode"""
     if 'user_id' not in session:
         return jsonify({'success': False, 'message': 'Not authenticated'}), 401
 
     try:
         data = request.get_json()
         product_id = data.get('product_id')
+        barcode = data.get('barcode')
         quantity = int(data.get('quantity', 1))
+
+        if not product_id and not barcode:
+            return jsonify({'success': False, 'message': 'Either product_id or barcode is required'}), 400
+
+        db = SessionLocal()
+        product = None
+
+        # First try to find product by ID if provided
+        if product_id:
+            product = crud.get_product(db, product_id)
+        elif barcode:
+            # Try to find product by barcode
+            if hasattr(crud, 'get_product_by_barcode'):
+                product = crud.get_product_by_barcode(db, barcode)
+            else:
+                # Fallback: direct query
+                product = db.query(models.Product).filter(models.Product.barcode == barcode).first()
+
+            if not product:
+                # Search for product with barcode in name or SKU (fallback)
+                products = db.query(models.Product).filter(
+                    (models.Product.name.ilike(f'%{barcode}%')) |
+                    (models.Product.sku.ilike(f'%{barcode}%'))
+                ).first()
+
+                if not products:
+                    db.close()
+                    return jsonify({
+                        'success': False,
+                        'message': f'Product with barcode "{barcode}" not found'
+                    }), 404
+                product = products
+
+        if not product:
+            db.close()
+            return jsonify({'success': False, 'message': 'Product not found'}), 404
+
+        # Check stock availability
+        if product.stock_quantity < quantity:
+            db.close()
+            return jsonify({
+                'success': False,
+                'message': f'Only {product.stock_quantity} in stock'
+            }), 400
+
+        # Initialize cart in session if not exists
+        if 'cart' not in session:
+            session['cart'] = []
+
+        cart = session['cart']
+
+        # Check if product already in cart
+        item_index = next((i for i, item in enumerate(cart) if item['product_id'] == product.id), -1)
+
+        if item_index >= 0:
+            # Update quantity
+            new_quantity = cart[item_index]['quantity'] + quantity
+            if new_quantity < 1:
+                # Remove item if quantity would be 0 or negative
+                cart.pop(item_index)
+            else:
+                # Check stock for new total quantity
+                if new_quantity > product.stock_quantity:
+                    db.close()
+                    return jsonify({
+                        'success': False,
+                        'message': f'Only {product.stock_quantity} in stock'
+                    }), 400
+
+                cart[item_index]['quantity'] = new_quantity
+                cart[item_index]['subtotal'] = new_quantity * float(product.price)
+        else:
+            # Add new item
+            cart.append({
+                'product_id': product.id,
+                'name': product.name,
+                'price': float(product.price),
+                'quantity': quantity,
+                'subtotal': quantity * float(product.price),
+                'sku': product.sku,
+                'barcode': product.barcode if hasattr(product, 'barcode') else None
+            })
+
+        session['cart'] = cart
+        session.modified = True
+        db.close()
+
+        return jsonify({
+            'success': True,
+            'message': 'Cart updated',
+            'cart_count': len(cart),
+            'cart_total': sum(item['subtotal'] for item in cart),
+            'cart_items': cart
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/cart', methods=['GET'])
+def api_get_cart():
+    """Get current cart"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+    try:
+        cart = session.get('cart', [])
+
+        return jsonify({
+            'success': True,
+            'cart_count': len(cart),
+            'cart_total': sum(item.get('subtotal', 0) for item in cart),
+            'cart_items': cart
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/cart/update', methods=['POST'])
+def api_update_cart():
+    """Update cart item quantity"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+    try:
+        data = request.get_json()
+        product_id = data.get('product_id')
+        quantity_change = int(data.get('quantity_change', 0))
+
+        if not product_id:
+            return jsonify({'success': False, 'message': 'product_id is required'}), 400
 
         db = SessionLocal()
         product = crud.get_product(db, product_id)
@@ -824,8 +1019,9 @@ def api_add_to_cart():
         item_index = next((i for i, item in enumerate(cart) if item['product_id'] == product_id), -1)
 
         if item_index >= 0:
-            # Update quantity
-            new_quantity = cart[item_index]['quantity'] + quantity
+            # Calculate new quantity
+            new_quantity = cart[item_index]['quantity'] + quantity_change
+
             if new_quantity < 1:
                 # Remove item if quantity would be 0 or negative
                 cart.pop(item_index)
@@ -841,8 +1037,12 @@ def api_add_to_cart():
                 cart[item_index]['quantity'] = new_quantity
                 cart[item_index]['subtotal'] = new_quantity * float(product.price)
         else:
-            # Add new item
-            if quantity > product.stock_quantity:
+            # Adding new item with quantity_change as initial quantity
+            if quantity_change < 1:
+                db.close()
+                return jsonify({'success': False, 'message': 'Quantity must be positive'}), 400
+
+            if quantity_change > product.stock_quantity:
                 db.close()
                 return jsonify({
                     'success': False,
@@ -853,9 +1053,10 @@ def api_add_to_cart():
                 'product_id': product_id,
                 'name': product.name,
                 'price': float(product.price),
-                'quantity': quantity,
-                'subtotal': quantity * float(product.price),
-                'sku': product.sku
+                'quantity': quantity_change,
+                'subtotal': quantity_change * float(product.price),
+                'sku': product.sku,
+                'barcode': product.barcode if hasattr(product, 'barcode') else None
             })
 
         session['cart'] = cart
@@ -873,165 +1074,507 @@ def api_add_to_cart():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-@app.route('/api/cart', methods=['GET'])
-def api_get_cart():
-    """Get current cart contents"""
-    if 'user_id' not in session:
-        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
-
-    cart = session.get('cart', [])
-    cart_total = sum(item['subtotal'] for item in cart)
-
-    return jsonify({
-        'success': True,
-        'cart_items': cart,
-        'cart_total': cart_total,
-        'cart_count': len(cart)
-    })
-
-
-@app.route('/api/cart/clear', methods=['POST'])
-def api_clear_cart():
-    """Clear the cart"""
-    if 'user_id' not in session:
-        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
-
-    session.pop('cart', None)
-    session.modified = True
-
-    return jsonify({
-        'success': True,
-        'message': 'Cart cleared'
-    })
-
-
 @app.route('/api/cart/remove/<int:product_id>', methods=['POST'])
 def api_remove_from_cart(product_id):
     """Remove item from cart"""
     if 'user_id' not in session:
         return jsonify({'success': False, 'message': 'Not authenticated'}), 401
 
-    if 'cart' in session:
-        cart = session['cart']
-        session['cart'] = [item for item in cart if item['product_id'] != product_id]
-        session.modified = True
-
-    new_cart = session.get('cart', [])
-
-    return jsonify({
-        'success': True,
-        'message': 'Item removed from cart',
-        'cart_count': len(new_cart),
-        'cart_total': sum(item['subtotal'] for item in new_cart),
-        'cart_items': new_cart
-    })
-
-
-# Complete Sale Endpoint
-@app.route('/sales/complete', methods=['POST'])
-def complete_sale():
-    """Complete the sale"""
-    if 'user_id' not in session:
-        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
-
-    if not check_permission('cashier'):
-        return jsonify({'success': False, 'message': 'Access denied'}), 403
-
-    db = SessionLocal()
     try:
-        data = request.get_json()
+        # Initialize cart in session if not exists
+        if 'cart' not in session:
+            session['cart'] = []
 
-        if not data:
-            return jsonify({'success': False, 'message': 'No data provided'}), 400
+        cart = session['cart']
 
-        cart = session.get('cart', [])
-        if not cart:
-            return jsonify({'success': False, 'message': 'Cart is empty'}), 400
+        # Find and remove item
+        initial_length = len(cart)
+        cart = [item for item in cart if item['product_id'] != product_id]
 
-        # Calculate totals
-        subtotal = sum(item['subtotal'] for item in cart)
-        tax_rate = COMPANY_SETTINGS.get('tax_rate', 0.075)
-        tax = subtotal * tax_rate
-        discount_amount = float(data.get('discount_amount', 0))
-        total = subtotal + tax - discount_amount
+        if len(cart) == initial_length:
+            return jsonify({'success': False, 'message': 'Item not found in cart'}), 404
 
-        payment_method = data.get('payment_method', 'cash')
-        amount_paid = float(data.get('amount_paid', 0))
-        customer_id = data.get('customer_id')
-
-        # Check if amount_paid is sufficient
-        if amount_paid < total:
-            return jsonify({
-                'success': False,
-                'message': f'Insufficient payment. Total: {format_naira(total)}'
-            }), 400
-
-        change_given = amount_paid - total if amount_paid > total else 0
-
-        # Generate receipt number
-        today = datetime.now()
-        receipt_number = f'REC-{today.strftime("%Y%m%d%H%M%S")}'
-
-        # Create sale
-        sale = models.Sale(
-            receipt_number=receipt_number,
-            total_amount=total,
-            tax_amount=tax,
-            discount_amount=discount_amount,
-            payment_method=payment_method,
-            payment_status="completed",
-            customer_id=customer_id
-        )
-
-        db.add(sale)
-        db.flush()  # Get the sale ID
-
-        # Add sale items
-        for item in cart:
-            sale_item = models.SaleItem(
-                sale_id=sale.id,
-                product_id=item['product_id'],
-                quantity=item['quantity'],
-                unit_price=item['price'],
-                subtotal=item['subtotal']
-            )
-            db.add(sale_item)
-
-            # Update product stock
-            product = db.query(models.Product).filter(models.Product.id == item['product_id']).first()
-            if product:
-                product.stock_quantity = max(0, product.stock_quantity - item['quantity'])
-
-        db.commit()
-
-        # Clear cart from session
-        session.pop('cart', None)
+        session['cart'] = cart
         session.modified = True
 
         return jsonify({
             'success': True,
-            'message': 'Sale completed successfully!',
-            'sale_id': sale.id,
-            'receipt_number': sale.receipt_number,
-            'receipt_data': {
-                'receipt_number': sale.receipt_number,
-                'subtotal': subtotal,
-                'tax': tax,
-                'discount': discount_amount,
-                'total': total,
-                'amount_paid': amount_paid,
-                'change': change_given,
-                'payment_method': payment_method,
-                'date': sale.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-                'cashier': session.get('full_name', session.get('username', 'Cashier')),
-                'company': COMPANY_SETTINGS,
-                'items': cart
+            'message': 'Item removed from cart',
+            'cart_count': len(cart),
+            'cart_total': sum(item['subtotal'] for item in cart),
+            'cart_items': cart
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/cart/clear', methods=['POST'])
+def api_clear_cart():
+    """Clear all items from cart"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+    try:
+        session['cart'] = []
+        session.modified = True
+
+        return jsonify({
+            'success': True,
+            'message': 'Cart cleared',
+            'cart_count': 0,
+            'cart_total': 0,
+            'cart_items': []
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# Barcode Search Endpoint
+@app.route('/api/products/barcode/<barcode>', methods=['GET'])
+def api_get_product_by_barcode(barcode):
+    """Get product by barcode"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+    try:
+        db = SessionLocal()
+
+        # First try exact barcode match
+        if hasattr(crud, 'get_product_by_barcode'):
+            product = crud.get_product_by_barcode(db, barcode)
+        else:
+            product = db.query(models.Product).filter(models.Product.barcode == barcode).first()
+
+        if not product:
+            # Try partial matches
+            product = db.query(models.Product).filter(
+                (models.Product.barcode.ilike(f'%{barcode}%')) |
+                (models.Product.sku.ilike(f'%{barcode}%')) |
+                (models.Product.name.ilike(f'%{barcode}%'))
+            ).first()
+
+        if product:
+            result = {
+                'success': True,
+                'product': {
+                    'id': product.id,
+                    'name': product.name,
+                    'sku': product.sku,
+                    'barcode': product.barcode if hasattr(product, 'barcode') else None,
+                    'price': float(product.price),
+                    'cost_price': float(product.cost_price) if hasattr(product,
+                                                                       'cost_price') and product.cost_price else None,
+                    'stock_quantity': product.stock_quantity,
+                    'reorder_level': product.reorder_level if hasattr(product, 'reorder_level') else 10,
+                    'category': product.category,
+                    'description': product.description
+                }
             }
+            db.close()
+            return jsonify(result)
+        else:
+            db.close()
+            return jsonify({
+                'success': False,
+                'message': f'Product with barcode "{barcode}" not found'
+            }), 404
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/sales/complete', methods=['POST'])
+# def complete_sale():
+#     """Complete the sale"""
+#     if 'user_id' not in session:
+#         return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+#     if not check_permission('cashier'):
+#         return jsonify({'success': False, 'message': 'Access denied'}), 403
+
+#     db = SessionLocal()
+#     try:
+#         data = request.get_json()
+
+#         if not data:
+#             return jsonify({'success': False, 'message': 'No data provided'}), 400
+
+#         cart = session.get('cart', [])
+#         if not cart:
+#             return jsonify({'success': False, 'message': 'Cart is empty'}), 400
+
+        # Calculate totals
+#         subtotal = sum(item['subtotal'] for item in cart)
+#         tax_rate = COMPANY_SETTINGS.get('tax_rate', 0.075)
+#         tax = subtotal * tax_rate
+#         discount_amount = float(data.get('discount_amount', 0))
+#         total = subtotal + tax - discount_amount
+
+#         payment_method = data.get('payment_method', 'cash')
+#         amount_paid = float(data.get('amount_paid', 0))
+#         customer_id = data.get('customer_id')
+
+        # Check if amount_paid is sufficient
+#         if amount_paid < total:
+#             return jsonify({
+#                 'success': False,
+#                 'message': f'Insufficient payment. Total: {format_naira(total)}'
+#             }), 400
+
+#         change_given = amount_paid - total if amount_paid > total else 0
+
+        # Generate receipt number
+#         today = datetime.now()
+#         receipt_number = f'REC-{today.strftime("%Y%m%d%H%M%S")}'
+
+        # Create sale
+#         sale = models.Sale(
+#             receipt_number=receipt_number,
+#             total_amount=total,
+#             tax_amount=tax,
+#             discount_amount=discount_amount,
+#             payment_method=payment_method,
+#             payment_status="completed",
+#             customer_id=customer_id
+#         )
+
+#         db.add(sale)
+#         db.flush()  # Get the sale ID
+
+        # Add sale items
+#         for item in cart:
+#             sale_item = models.SaleItem(
+#                 sale_id=sale.id,
+#                 product_id=item['product_id'],
+#                 quantity=item['quantity'],
+#                 unit_price=item['price'],
+#                 subtotal=item['subtotal']
+#             )
+#             db.add(sale_item)
+
+            # Update product stock
+#             product = db.query(models.Product).filter(models.Product.id == item['product_id']).first()
+#             if product:
+#                 product.stock_quantity = max(0, product.stock_quantity - item['quantity'])
+
+#         db.commit()
+
+        # Clear cart from session
+#         session.pop('cart', None)
+#         session.modified = True
+
+#         return jsonify({
+#             'success': True,
+#             'message': 'Sale completed successfully!',
+#             'sale_id': sale.id,
+#             'receipt_number': sale.receipt_number,
+#             'receipt_data': {
+#                 'receipt_number': sale.receipt_number,
+#                 'subtotal': subtotal,
+#                 'tax': tax,
+#                 'discount': discount_amount,
+#                 'total': total,
+#                 'amount_paid': amount_paid,
+#                 'change': change_given,
+#                 'payment_method': payment_method,
+#                 'date': sale.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+#                 'cashier': session.get('full_name', session.get('username', 'Cashier')),
+#                 'company': COMPANY_SETTINGS,
+#                 'items': cart
+#             }
+#         })
+#     except Exception as e:
+#         return jsonify({'success': False, 'message': str(e)}), 500
+#     finally:
+#         db.close()
+
+
+# Add this route for barcode checking (for duplicate prevention)
+@app.route('/api/products/check-barcode/<barcode>')
+def api_check_barcode(barcode):
+    """Check if barcode already exists"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+    try:
+        exclude_id = request.args.get('exclude', type=int)
+
+        db = SessionLocal()
+
+        query = db.query(models.Product).filter(
+            models.Product.barcode == barcode
+        )
+
+        if exclude_id:
+            query = query.filter(models.Product.id != exclude_id)
+
+        product = query.first()
+
+        if product:
+            return jsonify({
+                'exists': True,
+                'product_id': product.id,
+                'product_name': product.name
+            })
+        else:
+            return jsonify({'exists': False})
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
+
+
+# Update product barcode API
+@app.route('/api/products/<int:product_id>/barcode', methods=['POST'])
+def api_update_product_barcode(product_id):
+    """Update product barcode"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+    if not check_permission('inventory'):
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+
+    try:
+        data = request.get_json()
+        barcode = data.get('barcode')
+
+        if not barcode:
+            return jsonify({'success': False, 'message': 'Barcode is required'}), 400
+
+        db = SessionLocal()
+
+        # Check if barcode already exists for another product
+        existing = db.query(models.Product).filter(
+            models.Product.barcode == barcode,
+            models.Product.id != product_id
+        ).first()
+
+        if existing:
+            return jsonify({
+                'success': False,
+                'message': f'Barcode already exists for product: {existing.name}'
+            })
+
+        # Update the product
+        product = db.query(models.Product).filter(
+            models.Product.id == product_id
+        ).first()
+
+        if product:
+            product.barcode = barcode
+            db.commit()
+            return jsonify({
+                'success': True,
+                'message': 'Barcode updated successfully',
+                'barcode': barcode
+            })
+        else:
+            return jsonify({'success': False, 'message': 'Product not found'}), 404
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
+
+
+# Barcode-specific API endpoints
+@app.route('/api/products/barcode/check/<barcode>', methods=['GET'])
+def api_check_barcode_available(barcode):
+    """Check if barcode is available (not duplicate)"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+    db = SessionLocal()
+    try:
+        exclude_id = request.args.get('exclude', type=int)
+
+        query = db.query(models.Product).filter(
+            models.Product.barcode == barcode
+        )
+
+        if exclude_id:
+            query = query.filter(models.Product.id != exclude_id)
+
+        product = query.first()
+
+        return jsonify({
+            'available': product is None,
+            'exists': product is not None,
+            'product': {
+                'id': product.id,
+                'name': product.name,
+                'sku': product.sku
+            } if product else None
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
     finally:
         db.close()
+
+
+@app.route('/api/products/barcode/scan', methods=['POST'])
+def api_scan_barcode():
+    """Handle barcode scan from POS"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+    try:
+        data = request.get_json()
+        barcode = data.get('barcode', '').strip()
+
+        if not barcode:
+            return jsonify({'success': False, 'message': 'No barcode provided'}), 400
+
+        db = SessionLocal()
+
+        # Try to find product by barcode
+        if hasattr(crud, 'get_product_by_barcode'):
+            product = crud.get_product_by_barcode(db, barcode)
+        else:
+            product = db.query(models.Product).filter(models.Product.barcode == barcode).first()
+
+        if not product:
+            # Try alternative search methods
+            product = db.query(models.Product).filter(
+                (models.Product.sku == barcode) |
+                (models.Product.name.ilike(f'%{barcode}%'))
+            ).first()
+
+        if product:
+            result = {
+                'success': True,
+                'found': True,
+                'product': {
+                    'id': product.id,
+                    'name': product.name,
+                    'sku': product.sku,
+                    'barcode': product.barcode if hasattr(product, 'barcode') else None,
+                    'price': float(product.price),
+                    'stock_quantity': product.stock_quantity,
+                    'in_stock': product.stock_quantity > 0
+                }
+            }
+            db.close()
+            return jsonify(result)
+        else:
+            db.close()
+            return jsonify({
+                'success': True,
+                'found': False,
+                'message': f'Product with barcode "{barcode}" not found'
+            })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/products/<int:product_id>/update-barcode', methods=['POST'])
+def api_update_product_barcode_route(product_id):
+    """Update product barcode"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+    if not check_permission('inventory'):
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+
+    try:
+        data = request.get_json()
+        barcode = data.get('barcode', '').strip()
+
+        if not barcode:
+            return jsonify({'success': False, 'message': 'Barcode is required'}), 400
+
+        db = SessionLocal()
+
+        # Check if barcode already exists for another product
+        existing = db.query(models.Product).filter(
+            models.Product.barcode == barcode,
+            models.Product.id != product_id
+        ).first()
+
+        if existing:
+            return jsonify({
+                'success': False,
+                'message': f'Barcode already exists for product: {existing.name} (ID: {existing.id})'
+            })
+
+        # Update the product
+        product = db.query(models.Product).filter(
+            models.Product.id == product_id
+        ).first()
+
+        if product:
+            product.barcode = barcode
+            db.commit()
+            return jsonify({
+                'success': True,
+                'message': 'Barcode updated successfully',
+                'product': {
+                    'id': product.id,
+                    'name': product.name,
+                    'barcode': product.barcode
+                }
+            })
+        else:
+            return jsonify({'success': False, 'message': 'Product not found'}), 404
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/barcode/generate', methods=['POST'])
+def api_generate_barcode():
+    """Generate a unique barcode for a product"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+    try:
+        data = request.get_json()
+        sku = data.get('sku', '')
+
+        import hashlib
+        import time
+
+        if sku:
+            # Generate from SKU + timestamp
+            barcode = hashlib.md5(f"{sku}{time.time()}".encode()).hexdigest()[:13]
+        else:
+            # Generate random barcode
+            import random
+            barcode = ''.join([str(random.randint(0, 9)) for _ in range(13)])
+
+        # Ensure it's unique
+        db = SessionLocal()
+        attempts = 0
+        while attempts < 5:
+            existing = db.query(models.Product).filter(
+                models.Product.barcode == barcode
+            ).first()
+
+            if not existing:
+                db.close()
+                return jsonify({
+                    'success': True,
+                    'barcode': barcode,
+                    'format': 'EAN-13' if len(barcode) == 13 else 'Custom'
+                })
+
+            # Regenerate if exists
+            barcode = hashlib.md5(f"{barcode}{time.time()}".encode()).hexdigest()[:13]
+            attempts += 1
+
+        db.close()
+        return jsonify({'success': False, 'message': 'Failed to generate unique barcode'}), 500
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @app.route('/api/sales', methods=['POST'])
@@ -1505,12 +2048,488 @@ def initialize_database():
         }), 500
 
 
+@app.route('/api/products/search')
+def search_product_by_barcode():
+    """Search product by barcode, SKU, or name"""
+    search_term = request.args.get('q') or request.args.get('barcode') or request.args.get('sku')
+
+    if not search_term:
+        return jsonify({'success': False, 'message': 'No search term provided'}), 400
+
+    db = SessionLocal()
+
+    try:
+        product = None
+
+        # Search by barcode first
+        product = db.query(models.Product).filter(
+            models.Product.barcode == search_term
+        ).first()
+
+        # If not found by barcode, try SKU
+        if not product:
+            product = db.query(models.Product).filter(
+                models.Product.sku == search_term
+            ).first()
+
+        # If not found by SKU, try name (partial match)
+        if not product:
+            product = db.query(models.Product).filter(
+                models.Product.name.ilike(f'%{search_term}%')
+            ).first()
+
+        if product:
+            return jsonify({
+                'success': True,
+                'product': {
+                    'id': product.id,
+                    'name': product.name,
+                    'sku': product.sku,
+                    'barcode': product.barcode if hasattr(product, 'barcode') else None,
+                    'price': float(product.price),
+                    'stock_quantity': product.stock_quantity
+                }
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Product not found'
+            }), 404
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
+
+
 # Production configuration
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=2)
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') == 'production'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
+
+# Emergency database repair routes
+@app.route('/repair-database')
+def repair_database():
+    """Emergency database repair page"""
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Database Repair</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 40px; }
+            .container { max-width: 800px; margin: 0 auto; }
+            .option { padding: 20px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
+            .safe { background: #e8f5e8; }
+            .warning { background: #fff3cd; }
+            .danger { background: #f8d7da; }
+            .btn { padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block; }
+            .btn-safe { background: #28a745; color: white; }
+            .btn-warning { background: #ffc107; color: black; }
+            .btn-danger { background: #dc3545; color: white; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🔧 Database Repair Options</h1>
+
+            <div class="option safe">
+                <h3>Option 1: Safe Migration</h3>
+                <p>Add missing columns without losing data</p>
+                <a href="/run-migration" class="btn btn-safe">Run Safe Migration</a>
+            </div>
+
+            <div class="option warning">
+                <h3>Option 2: Quick Fix</h3>
+                <p>Temporarily fix the schema error without modifying database</p>
+                <a href="/quick-fix" class="btn btn-warning">Apply Quick Fix</a>
+            </div>
+
+            <div class="option danger">
+                <h3>Option 3: Nuclear Option</h3>
+                <p>⚠️ WARNING: This will DELETE ALL DATA and create fresh database</p>
+                <a href="/force-init-db" class="btn btn-danger">Recreate Database</a>
+            </div>
+        </div>
+    </html>
+    '''
+
+
+@app.route('/run-migration')
+def run_migration():
+    """Run database migration from web"""
+    try:
+        import sqlite3
+
+        db_path = 'pos.db'
+        if not os.path.exists(db_path):
+            return f"❌ Database not found at: {db_path}"
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        results = ["<h1>Migration Results</h1>"]
+
+        # Add missing columns
+        columns_to_add = [
+            ('cost_price', 'REAL DEFAULT 0'),
+            ('barcode', 'TEXT'),
+            ('reorder_level', 'INTEGER DEFAULT 10'),
+            ('location', 'TEXT'),
+            ('supplier_name', 'TEXT'),
+            ('supplier_code', 'TEXT'),
+            ('image_url', 'TEXT'),
+            ('is_active', 'BOOLEAN DEFAULT 1'),
+            ('updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+        ]
+
+        # Check existing columns
+        cursor.execute("PRAGMA table_info(products)")
+        existing_columns = [col[1] for col in cursor.fetchall()]
+
+        for col_name, col_type in columns_to_add:
+            if col_name not in existing_columns:
+                try:
+                    cursor.execute(f"ALTER TABLE products ADD COLUMN {col_name} {col_type}")
+                    results.append(f"✅ Added column: <strong>{col_name}</strong>")
+                except Exception as e:
+                    results.append(f"⚠️ Failed to add {col_name}: {str(e)}")
+
+        conn.commit()
+        conn.close()
+
+        results.append("<br><br><a href='/' class='btn'>Go to Dashboard</a>")
+        results.append("<a href='/repair-database' class='btn'>Back to Repair Options</a>")
+
+        return '<br>'.join(results)
+
+    except Exception as e:
+        return f'<h1>Migration Failed</h1><p>{str(e)}</p><p><a href="/repair-database">Go Back</a></p>'
+
+
+@app.route('/quick-fix')
+def quick_fix():
+    """Apply temporary fix for schema error"""
+    return '''
+    <h1>Quick Fix Applied</h1>
+    <p>The system will now try to work around the schema error.</p>
+    <p>This is a temporary fix. For permanent solution, run the migration.</p>
+    <p><a href="/">Try Dashboard Now</a></p>
+    <p><a href="/repair-database">Back to Repair Options</a></p>
+    '''
+
+
+@app.route('/migrate-schema')
+def migrate_schema():
+    """Fix database schema without losing data"""
+    try:
+        db = SessionLocal()
+
+        html_parts = ["<h1>📊 Database Schema Migration</h1>"]
+
+        # Use SQLAlchemy inspector to check current schema
+        from sqlalchemy import inspect
+        inspector = inspect(db.get_bind())
+
+        # Fix customers table
+        if 'customers' in inspector.get_table_names():
+            customer_columns = [col['name'] for col in inspector.get_columns('customers')]
+
+            if 'address' not in customer_columns:
+                try:
+                    db.execute("ALTER TABLE customers ADD COLUMN address TEXT")
+                    html_parts.append("✅ Added 'address' column to customers table")
+                except Exception as e:
+                    html_parts.append(f"⚠️ Could not add address: {str(e)}")
+            else:
+                html_parts.append("✅ customers.address already exists")
+
+        # Fix products table
+        if 'products' in inspector.get_table_names():
+            product_columns = [col['name'] for col in inspector.get_columns('products')]
+
+            required_columns = [
+                ('cost_price', 'REAL DEFAULT 0'),
+                ('barcode', 'TEXT'),
+                ('reorder_level', 'INTEGER DEFAULT 10'),
+                ('location', 'TEXT'),
+                ('supplier_name', 'TEXT'),
+                ('supplier_code', 'TEXT'),
+                ('image_url', 'TEXT'),
+                ('is_active', 'BOOLEAN DEFAULT 1'),
+                ('updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+            ]
+
+            for col_name, col_type in required_columns:
+                if col_name not in product_columns:
+                    try:
+                        db.execute(f"ALTER TABLE products ADD COLUMN {col_name} {col_type}")
+                        html_parts.append(f"✅ Added '{col_name}' column to products table")
+                    except Exception as e:
+                        html_parts.append(f"⚠️ Could not add {col_name}: {str(e)}")
+                else:
+                    html_parts.append(f"✅ products.{col_name} already exists")
+
+        # Create indexes
+        try:
+            db.execute("CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)")
+            html_parts.append("✅ Created index on barcode column")
+        except Exception as e:
+            html_parts.append(f"⚠️ Could not create index: {str(e)}")
+
+        db.commit()
+
+        html_parts.append("<h3>🎉 Migration Complete!</h3>")
+        html_parts.append(
+            '<p><a href="/" style="font-size: 18px; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 5px;">Go to Dashboard</a></p>')
+
+        db.close()
+        return '<br>'.join(html_parts)
+
+    except Exception as e:
+        return f"<h1>Migration Failed</h1><p>Error: {str(e)}</p><p><a href='/'>Try Anyway</a></p>"
+
+    @app.route('/fix-all')
+    def fix_all_columns():
+        """Fix ALL missing database columns at once"""
+        try:
+            import sqlite3
+
+            conn = sqlite3.connect('pos.db')
+            cursor = conn.cursor()
+
+            results = ["<h1>🔧 Complete Database Fix</h1>"]
+
+            # Add ALL missing columns for all tables
+            fixes = [
+                ("customers", "address", "TEXT"),
+                ("products", "cost_price", "REAL DEFAULT 0"),
+                ("products", "barcode", "TEXT"),
+                ("products", "is_active", "BOOLEAN DEFAULT 1"),
+                ("sales", "amount_paid", "REAL DEFAULT 0"),
+                ("sales", "change_amount", "REAL DEFAULT 0"),
+                ("sales", "tax_amount", "REAL DEFAULT 0"),
+                ("sales", "discount_amount", "REAL DEFAULT 0"),
+                ("sales", "payment_status", "TEXT DEFAULT 'completed'"),
+                ("sale_items", "unit_price", "REAL DEFAULT 0"),
+                ("sale_items", "subtotal", "REAL DEFAULT 0")
+            ]
+
+            for table, column, col_type in fixes:
+                try:
+                    # Check if column exists first
+                    cursor.execute(f"PRAGMA table_info({table})")
+                    existing = [col[1] for col in cursor.fetchall()]
+
+                    if column not in existing:
+                        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+                        results.append(f"✅ Added <strong>{table}.{column}</strong>")
+                    else:
+                        results.append(f"✓ Already exists: <strong>{table}.{column}</strong>")
+                except Exception as e:
+                    results.append(f"⚠️ {table}.{column}: {str(e)}")
+
+            conn.commit()
+            conn.close()
+
+            results.append("<h3>🎉 All fixes applied!</h3>")
+            results.append(
+                '<p><a href="/" style="font-size: 18px; padding: 10px 20px; background: green; color: white; text-decoration: none;">Go to Dashboard</a></p>')
+
+            return '<br>'.join(results)
+
+        except Exception as e:
+            return f'<h1>Error</h1><p>{str(e)}</p>'
+
+
+@app.route('/api/sales/complete', methods=['POST'])
+# def complete_sale_api():
+#     """Complete sale API endpoint"""
+#     if 'user_id' not in session:
+#         return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+#     if not check_permission('cashier'):
+#         return jsonify({'success': False, 'message': 'Access denied'}), 403
+
+#     db = SessionLocal()
+#     try:
+#         data = request.get_json()
+
+#         if not data:
+#             return jsonify({'success': False, 'message': 'No data provided'}), 400
+
+#         cart = session.get('cart', [])
+#         if not cart:
+#             return jsonify({'success': False, 'message': 'Cart is empty'}), 400
+
+        # Calculate totals
+#         subtotal = sum(item['subtotal'] for item in cart)
+#         tax_rate = COMPANY_SETTINGS.get('tax_rate', 0.075)
+#         tax = subtotal * tax_rate
+#         discount_amount = float(data.get('discount_amount', 0))
+#         total = subtotal + tax - discount_amount
+
+        # Get payment details
+#         payment_method = data.get('payment_method', 'cash')
+#         amount_paid = float(data.get('amount_paid', 0))
+
+#         if amount_paid < total:
+#             return jsonify({
+#                 'success': False,
+#                 'message': f'Insufficient payment. Total: ₦{total:,.2f}, Paid: ₦{amount_paid:,.2f}'
+#             }), 400
+
+#         change_given = amount_paid - total if amount_paid > total else 0
+
+        # Generate receipt number
+#         import random
+#         receipt_number = f'REC-{datetime.now().strftime("%Y%m%d")}-{random.randint(1000, 9999)}'
+
+        # Create sale
+#         from app.models import Sale, SaleItem
+
+#         sale = Sale(
+#             receipt_number=receipt_number,
+#             total_amount=total,
+#             tax_amount=tax,
+#             discount_amount=discount_amount,
+#             amount_paid=amount_paid,
+#             change_amount=change_given,
+#             payment_method=payment_method,
+#             payment_status='completed',
+#             customer_id=data.get('customer_id'),
+#             user_id=session.get('user_id')
+#         )
+
+#         db.add(sale)
+#         db.flush()  # Get sale ID
+
+        # Add sale items
+#         for item in cart:
+#             sale_item = SaleItem(
+#                 sale_id=sale.id,
+#                 product_id=item['product_id'],
+#                 quantity=item['quantity'],
+#                 unit_price=item['price'],
+#                 subtotal=item['subtotal']
+#             )
+#             db.add(sale_item)
+
+            # Update product stock
+#             product = db.query(models.Product).filter(models.Product.id == item['product_id']).first()
+#             if product:
+#                 product.stock_quantity -= item['quantity']
+
+#         db.commit()
+
+        # Clear cart
+#         session.pop('cart', None)
+
+#         return jsonify({
+#             'success': True,
+#             'message': 'Sale completed successfully!',
+#             'receipt_number': receipt_number,
+#             'sale_id': sale.id,
+#             'total': total,
+#             'change': change_given
+#         })
+
+#     except Exception as e:
+#         db.rollback()
+#         import traceback
+#         traceback.print_exc()
+#         return jsonify({'success': False, 'message': str(e)}), 500
+#     finally:
+#         db.close()
+
+@app.route('/sales/complete', methods=['POST'])
+def complete_sale():
+    """Complete the sale"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+    if not check_permission('cashier'):
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+
+    db = SessionLocal()
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+
+        cart = session.get('cart', [])
+        if not cart:
+            return jsonify({'success': False, 'message': 'Cart is empty'}), 400
+
+        # Calculate totals
+        subtotal = sum(item['subtotal'] for item in cart)
+        tax_rate = COMPANY_SETTINGS.get('tax_rate', 0.075)
+        tax = subtotal * tax_rate
+        discount_amount = float(data.get('discount_amount', 0))
+        total = subtotal + tax - discount_amount
+        payment_method = data.get('payment_method', 'cash')
+        amount_paid = float(data.get('amount_paid', total))  # Default to total if not specified
+
+        if amount_paid < total:
+            return jsonify({
+                'success': False,
+                'message': f'Insufficient payment. Total: ₦{total:,.2f}'
+            }), 400
+
+        change_given = amount_paid - total if amount_paid > total else 0
+        receipt_number = f'REC-{datetime.now().strftime("%Y%m%d%H%M%S")}'
+
+        # Create sale
+        sale = models.Sale(
+            receipt_number=receipt_number,
+            total_amount=total,
+            tax_amount=tax,
+            discount_amount=discount_amount,
+            amount_paid=amount_paid,
+            change_amount=change_given,
+            payment_method=payment_method,
+            payment_status="completed",
+            customer_id=data.get('customer_id'),
+            user_id=session.get('user_id')
+        )
+
+        db.add(sale)
+        db.flush()
+
+        # Add sale items and update stock
+        for item in cart:
+            sale_item = models.SaleItem(
+                sale_id=sale.id,
+                product_id=item['product_id'],
+                quantity=item['quantity'],
+                unit_price=item['price'],
+                subtotal=item['subtotal']
+            )
+            db.add(sale_item)
+
+            product = db.query(models.Product).filter(models.Product.id == item['product_id']).first()
+            if product:
+                product.stock_quantity = max(0, product.stock_quantity - item['quantity'])
+
+        db.commit()
+        session.pop('cart', None)
+
+        return jsonify({
+            'success': True,
+            'message': 'Sale completed!',
+            'sale_id': sale.id,
+            'receipt_number': receipt_number,
+            'total': total,
+            'change': change_given
+        })
+
+    except Exception as e:
+        db.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        db.close()
 if __name__ == '__main__':
     # Get port from environment variable (Render sets PORT)
     port = int(os.environ.get('PORT', 5000))

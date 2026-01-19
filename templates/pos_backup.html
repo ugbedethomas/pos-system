@@ -33,11 +33,7 @@
                            id="manual-barcode-input"
                            placeholder="Enter barcode"
                            class="w-48 px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                           autocomplete="off"
-                           autofocus
-                           spellcheck="false"
-                           autocorrect="off"
-                           autocapitalize="off">
+                           autocomplete="off">
                     <i class="fas fa-keyboard absolute left-3 top-3.5 text-gray-400"></i>
                     <div class="absolute right-2 top-2">
                         <button id="manual-barcode-btn"
@@ -370,17 +366,14 @@
 <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
 
 <script>
-// ADVANCED POS SYSTEM WITH BARCODE VALIDATION
-class AdvancedPOSSystem {
+// SIMPLIFIED POS SYSTEM - WORKING VERSION
+class POSSystem {
     constructor() {
         this.cart = [];
         this.discountAmount = 0;
         this.selectedPaymentMethod = 'cash';
         this.companyTaxRate = {{ company.tax_rate }};
         this.scannerActive = false;
-        this.barcodeDebounceTime = null;
-        this.lastBarcode = '';
-        this.scanHistory = [];
         this.init();
     }
 
@@ -388,353 +381,6 @@ class AdvancedPOSSystem {
         this.setupEventListeners();
         this.loadCart();
         this.selectPaymentMethod('cash');
-        this.autoFocusBarcodeInput();
-    }
-
-    // BARCODE VALIDATION SYSTEM
-    validateBarcodeFormat(barcode) {
-        const barcodeStr = barcode.toString().trim();
-
-        // Remove any non-digit characters for numeric barcodes
-        const digitsOnly = barcodeStr.replace(/\D/g, '');
-        const length = barcodeStr.length;
-        const digitsLength = digitsOnly.length;
-
-        // EAN-13: 13 digits
-        if (digitsLength === 13 && /^\d{13}$/.test(digitsOnly)) {
-            const checksumValid = this.validateEANChecksum(digitsOnly);
-            return {
-                valid: true,
-                format: 'EAN-13',
-                clean: digitsOnly,
-                checksumValid: checksumValid
-            };
-        }
-
-        // UPC-A: 12 digits
-        if (digitsLength === 12 && /^\d{12}$/.test(digitsOnly)) {
-            const checksumValid = this.validateUPCChecksum(digitsOnly);
-            return {
-                valid: true,
-                format: 'UPC-A',
-                clean: digitsOnly,
-                checksumValid: checksumValid
-            };
-        }
-
-        // EAN-8: 8 digits
-        if (digitsLength === 8 && /^\d{8}$/.test(digitsOnly)) {
-            const checksumValid = this.validateEANChecksum(digitsOnly);
-            return {
-                valid: true,
-                format: 'EAN-8',
-                clean: digitsOnly,
-                checksumValid: checksumValid
-            };
-        }
-
-        // UPC-E: 8 digits (compressed UPC)
-        if (digitsLength === 8 && /^\d{8}$/.test(digitsOnly)) {
-            return {
-                valid: true,
-                format: 'UPC-E',
-                clean: digitsOnly,
-                checksumValid: true
-            };
-        }
-
-        // CODE 128: Variable length, alphanumeric
-        if (/^[\x00-\x7F]{1,}$/.test(barcodeStr) && length >= 1) {
-            return {
-                valid: true,
-                format: 'CODE 128',
-                clean: barcodeStr,
-                checksumValid: true
-            };
-        }
-
-        // CODE 39: Alphanumeric, starts and ends with *
-        if (/^[A-Z0-9\-\.\ \$\/\+\%]+$/i.test(barcodeStr) && length >= 1) {
-            return {
-                valid: true,
-                format: 'CODE 39',
-                clean: barcodeStr,
-                checksumValid: true
-            };
-        }
-
-        // CODE 93: Similar to CODE 39 but denser
-        if (/^[A-Z0-9\-\.\ \$\+\%\/]+$/i.test(barcodeStr) && length >= 1) {
-            return {
-                valid: true,
-                format: 'CODE 93',
-                clean: barcodeStr,
-                checksumValid: true
-            };
-        }
-
-        // ITF (Interleaved 2 of 5): Even number of digits
-        if (digitsLength % 2 === 0 && digitsLength >= 2 && /^\d+$/.test(digitsOnly)) {
-            return {
-                valid: true,
-                format: 'ITF',
-                clean: digitsOnly,
-                checksumValid: true
-            };
-        }
-
-        // If none match but has content, accept as generic
-        if (barcodeStr.length >= 3) {
-            return {
-                valid: true,
-                format: 'GENERIC',
-                clean: barcodeStr,
-                checksumValid: true
-            };
-        }
-
-        return {
-            valid: false,
-            format: 'UNKNOWN',
-            clean: barcodeStr,
-            checksumValid: false
-        };
-    }
-
-    validateEANChecksum(barcode) {
-        if (!barcode || barcode.length < 8) return false;
-
-        const digits = barcode.split('').map(Number);
-        const checkDigit = digits.pop();
-
-        let sum = 0;
-        for (let i = 0; i < digits.length; i++) {
-            sum += digits[i] * ((i % 2 === 0) ? 1 : 3);
-        }
-
-        const calculatedCheck = (10 - (sum % 10)) % 10;
-        return calculatedCheck === checkDigit;
-    }
-
-    validateUPCChecksum(barcode) {
-        if (!barcode || barcode.length !== 12) return false;
-
-        const digits = barcode.split('').map(Number);
-        const checkDigit = digits.pop();
-
-        let sum = 0;
-        for (let i = 0; i < digits.length; i++) {
-            sum += digits[i] * ((i % 2 === 0) ? 3 : 1);
-        }
-
-        const calculatedCheck = (10 - (sum % 10)) % 10;
-        return calculatedCheck === checkDigit;
-    }
-
-    formatBarcodeDisplay(barcode, format) {
-        const barcodeStr = barcode.toString();
-
-        switch(format) {
-            case 'EAN-13':
-                return barcodeStr.replace(/(\d{3})(\d{5})(\d{5})/, '$1 $2 $3');
-            case 'UPC-A':
-                return barcodeStr.replace(/(\d{5})(\d{5})(\d{1})/, '$1 $2 $3');
-            case 'EAN-8':
-                return barcodeStr.replace(/(\d{4})(\d{4})/, '$1 $2');
-            default:
-                return barcodeStr;
-        }
-    }
-
-    async processBarcode(barcodeValue) {
-        if (!barcodeValue || barcodeValue.trim() === '') {
-            this.showToast('Please enter a barcode', 'warning');
-            return;
-        }
-
-        // Normalize barcode
-        const cleanBarcode = barcodeValue.trim();
-
-        // Debounce: ignore duplicate scans within 500ms
-        const now = Date.now();
-        if (this.lastBarcode === cleanBarcode && now - this.lastBarcodeTime < 500) {
-            this.lastBarcodeTime = now;
-            return;
-        }
-
-        this.lastBarcode = cleanBarcode;
-        this.lastBarcodeTime = now;
-
-        // Validate barcode format
-        const validation = this.validateBarcodeFormat(cleanBarcode);
-
-        if (!validation.valid) {
-            this.showBarcodeFeedback('Invalid barcode format', false);
-            this.playSound('error');
-            return;
-        }
-
-        // Add to scan history
-        this.scanHistory.push({
-            barcode: validation.clean,
-            format: validation.format,
-            timestamp: new Date().toISOString(),
-            checksumValid: validation.checksumValid
-        });
-
-        // Keep only last 50 scans
-        if (this.scanHistory.length > 50) {
-            this.scanHistory.shift();
-        }
-
-        // Try to find product by barcode
-        await this.findProductByBarcode(validation.clean, validation.format, validation.checksumValid);
-    }
-
-    async findProductByBarcode(barcode, format, checksumValid) {
-        try {
-            // First try API lookup
-            const response = await fetch(`/api/products/barcode/${encodeURIComponent(barcode)}`);
-
-            if (response.ok) {
-                const data = await response.json();
-
-                if (data.success && data.product) {
-                    // Create a mock product card element
-                    const mockCard = {
-                        getAttribute: (attr) => {
-                            if (attr === 'data-product-id') return data.product.id;
-                            if (attr === 'data-product-name') return data.product.name;
-                            if (attr === 'data-product-price') return data.product.price;
-                            if (attr === 'data-product-sku') return data.product.sku;
-                            return '';
-                        }
-                    };
-
-                    await this.addToCart(mockCard);
-                    this.showBarcodeFeedback(`${data.product.name} added`, true, format, checksumValid);
-                    return;
-                }
-            }
-
-            // Fallback to DOM search
-            const allProducts = document.querySelectorAll('.product-card');
-            let foundProduct = null;
-
-            for (const product of allProducts) {
-                const productBarcode = product.dataset.productBarcode;
-                if (productBarcode && productBarcode.includes(barcode)) {
-                    foundProduct = product;
-                    break;
-                }
-            }
-
-            if (foundProduct) {
-                await this.addToCart(foundProduct);
-                this.showBarcodeFeedback('Product added via barcode', true, format, checksumValid);
-            } else {
-                this.showBarcodeFeedback(`No product found for barcode: ${barcode}`, false);
-                this.playSound('error');
-            }
-        } catch (error) {
-            console.error('Barcode lookup error:', error);
-            this.showBarcodeFeedback('Error processing barcode', false);
-        }
-    }
-
-    showBarcodeFeedback(message, success, format = null, checksumValid = true) {
-        const input = document.getElementById('manual-barcode-input');
-
-        if (success) {
-            input.classList.remove('border-red-500', 'bg-red-50');
-            input.classList.add('border-green-500', 'bg-green-50');
-
-            // Show format badge if available
-            if (format) {
-                this.showFormatBadge(format, checksumValid);
-            }
-
-            // Reset after 500ms
-            setTimeout(() => {
-                input.classList.remove('border-green-500', 'bg-green-50');
-                input.value = '';
-                input.focus();
-            }, 500);
-
-            this.playSound('success');
-        } else {
-            input.classList.remove('border-green-500', 'bg-green-50');
-            input.classList.add('border-red-500', 'bg-red-50');
-            input.select();
-
-            this.playSound('error');
-        }
-
-        this.showToast(message, success ? 'success' : 'error');
-    }
-
-    showFormatBadge(format, checksumValid) {
-        const badge = document.createElement('div');
-        badge.className = `fixed top-20 right-4 px-3 py-2 rounded-lg shadow-lg z-50 animate-slideInRight ${
-            checksumValid ? 'bg-green-500 text-white' : 'bg-yellow-500 text-white'
-        }`;
-        badge.innerHTML = `
-            <div class="flex items-center gap-2">
-                <i class="fas fa-barcode"></i>
-                <span class="font-bold">${format}</span>
-                <span>${checksumValid ? '✓' : '⚠'}</span>
-            </div>
-        `;
-
-        document.body.appendChild(badge);
-
-        // Remove after 2 seconds
-        setTimeout(() => {
-            badge.classList.remove('animate-slideInRight');
-            badge.classList.add('animate-fadeOut');
-            setTimeout(() => badge.remove(), 300);
-        }, 2000);
-    }
-
-    playSound(type) {
-        try {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-
-            let frequency = 800;
-            if (type === 'success') frequency = 1000;
-            if (type === 'error') frequency = 400;
-
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-
-            oscillator.frequency.value = frequency;
-            oscillator.type = 'sine';
-
-            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-
-            oscillator.start();
-            oscillator.stop(audioContext.currentTime + 0.1);
-        } catch (e) {
-            console.log('Audio not supported');
-        }
-    }
-
-    autoFocusBarcodeInput() {
-        const barcodeInput = document.getElementById('manual-barcode-input');
-        if (barcodeInput) {
-            barcodeInput.focus();
-
-            // Auto-focus on any click outside input fields
-            document.addEventListener('click', (e) => {
-                if (!e.target.closest('input') && !e.target.closest('button') && !e.target.closest('select')) {
-                    barcodeInput.focus();
-                }
-            });
-        }
     }
 
     // Event Listeners
@@ -760,26 +406,25 @@ class AdvancedPOSSystem {
             });
         }
 
-        // Barcode scanner buttons
+        // Barcode scanner buttons - SIMPLIFIED
         const startScanBtn = document.getElementById('start-scan-btn');
         if (startScanBtn) {
             startScanBtn.addEventListener('click', () => {
-                this.startScanner();
+                alert('Barcode scanner would open here. To implement: Add camera access and barcode scanning library.');
             });
         }
 
         const stopScanBtn = document.getElementById('stop-scan-btn');
         if (stopScanBtn) {
             stopScanBtn.addEventListener('click', () => {
-                this.stopScanner();
+                document.getElementById('scanner-container').classList.add('hidden');
             });
         }
 
-        // Manual barcode input - Enhanced
+        // Manual barcode input
         document.getElementById('manual-barcode-btn').addEventListener('click', () => this.handleManualBarcode());
         document.getElementById('manual-barcode-input').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                e.preventDefault();
                 this.handleManualBarcode();
             }
         });
@@ -815,9 +460,6 @@ class AdvancedPOSSystem {
         document.getElementById('print-receipt').addEventListener('click', () => this.printThermalReceipt());
         document.getElementById('download-receipt').addEventListener('click', () => this.downloadReceiptPDF());
         document.getElementById('close-receipt').addEventListener('click', () => this.closeReceipt());
-
-        // Keyboard shortcuts
-        this.setupKeyboardShortcuts();
     }
 
     async handleManualBarcode() {
@@ -830,7 +472,43 @@ class AdvancedPOSSystem {
             return;
         }
 
-        await this.processBarcode(barcode);
+        // Clear input
+        input.value = '';
+
+        try {
+            // Search for product by barcode
+            const response = await fetch(`/api/products/barcode/${encodeURIComponent(barcode)}`);
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data.success && data.product) {
+                // Create a mock product card element
+                const mockCard = {
+                    getAttribute: (attr) => {
+                        if (attr === 'data-product-id') return data.product.id;
+                        if (attr === 'data-product-name') return data.product.name;
+                        if (attr === 'data-product-price') return data.product.price;
+                        if (attr === 'data-product-sku') return data.product.sku;
+                        return '';
+                    }
+                };
+
+                await this.addToCart(mockCard);
+                this.showToast(`${data.product.name} added via barcode`, 'success');
+            } else {
+                this.showToast(`Product with barcode "${barcode}" not found`, 'error');
+            }
+        } catch (error) {
+            console.error('Barcode lookup error:', error);
+            this.showToast('Error: ' + error.message, 'error');
+        }
+
+        // Refocus input for next entry
+        input.focus();
     }
 
     // Product Management
@@ -904,15 +582,12 @@ class AdvancedPOSSystem {
                 this.showToast(`${productName} added to cart`, 'success');
                 this.updateCartDisplay();
                 this.updateCompleteButton();
-                this.playSound('success');
             } else {
                 this.showToast(data.message || 'Failed to add to cart', 'error');
-                this.playSound('error');
             }
         } catch (error) {
             console.error('Error adding to cart:', error);
             this.showToast('Network error. Please try again.', 'error');
-            this.playSound('error');
         }
     }
 
@@ -964,13 +639,13 @@ class AdvancedPOSSystem {
 
     createCartItemElement(item) {
         const div = document.createElement('div');
-        div.className = 'cart-item bg-gray-50 rounded-lg p-4 mb-3 animate-fadeIn';
+        div.className = 'cart-item bg-gray-50 rounded-lg p-4 mb-3';
         div.innerHTML = `
             <div class="flex justify-between items-start mb-2">
                 <div class="flex-1">
                     <h4 class="font-semibold text-gray-800">${this.escapeHTML(item.name)}</h4>
                     <p class="text-xs text-gray-500">SKU: ${this.escapeHTML(item.sku)}</p>
-                    ${item.barcode ? `<p class="text-xs text-green-600 font-mono">Barcode: ${this.escapeHTML(item.barcode)}</p>` : ''}
+                    ${item.barcode ? `<p class="text-xs text-green-600">Barcode: ${this.escapeHTML(item.barcode)}</p>` : ''}
                 </div>
                 <button type="button" class="remove-item text-red-500 hover:text-red-700 ml-2">
                     <i class="fas fa-times"></i>
@@ -978,11 +653,11 @@ class AdvancedPOSSystem {
             </div>
             <div class="flex justify-between items-center">
                 <div class="flex items-center space-x-3">
-                    <button type="button" class="decrease-qty w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300 transition-colors">
+                    <button type="button" class="decrease-qty w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300">
                         <i class="fas fa-minus text-sm"></i>
                     </button>
-                    <span class="font-bold text-lg w-8 text-center">${item.quantity}</span>
-                    <button type="button" class="increase-qty w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300 transition-colors">
+                    <span class="font-bold text-lg">${item.quantity}</span>
+                    <button type="button" class="increase-qty w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300">
                         <i class="fas fa-plus text-sm"></i>
                     </button>
                 </div>
@@ -1025,7 +700,6 @@ class AdvancedPOSSystem {
                 this.cart = data.cart_items || [];
                 this.updateCartDisplay();
                 this.updateCompleteButton();
-                this.playSound('success');
             }
         } catch (error) {
             console.error('Error updating quantity:', error);
@@ -1087,7 +761,6 @@ class AdvancedPOSSystem {
                 document.getElementById('discount-amount').value = '0';
                 this.discountAmount = 0;
                 this.updateDiscount();
-                this.playSound('success');
             }
         } catch (error) {
             console.error('Error clearing cart:', error);
@@ -1195,17 +868,6 @@ class AdvancedPOSSystem {
         completeButton.disabled = !(this.cart.length > 0 && amountPaid >= total);
     }
 
-    // Scanner Functions
-    startScanner() {
-        this.showToast('Scanner would open here. Implementation requires camera access.', 'info');
-        // Note: For production, implement QuaggaJS or similar library
-        // document.getElementById('scanner-container').classList.remove('hidden');
-    }
-
-    stopScanner() {
-        document.getElementById('scanner-container').classList.add('hidden');
-    }
-
     // Sale Completion
     async completeSale() {
         if (this.cart.length === 0) {
@@ -1280,16 +942,12 @@ class AdvancedPOSSystem {
                     // Create mock receipt if none provided
                     this.createMockReceipt(saleData);
                 }
-
-                this.playSound('success');
             } else {
                 this.showToast(result.message || 'Sale failed', 'error');
-                this.playSound('error');
             }
         } catch (error) {
             console.error('Sale completion error:', error);
             this.showToast('Network error. Please try again.', 'error');
-            this.playSound('error');
         }
     }
 
@@ -1436,46 +1094,6 @@ class AdvancedPOSSystem {
         this.printThermalReceipt(); // Same function for now
     }
 
-    // Keyboard Shortcuts
-    setupKeyboardShortcuts() {
-        document.addEventListener('keydown', (e) => {
-            // Don't trigger shortcuts if user is typing in input fields
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                return;
-            }
-
-            // F2 - Clear cart
-            if (e.key === 'F2') {
-                e.preventDefault();
-                this.clearCart();
-            }
-
-            // F9 - Complete sale
-            if (e.key === 'F9') {
-                e.preventDefault();
-                document.getElementById('complete-sale').click();
-            }
-
-            // Ctrl+B - Focus barcode input
-            if (e.ctrlKey && e.key === 'b') {
-                e.preventDefault();
-                const barcodeInput = document.getElementById('manual-barcode-input');
-                barcodeInput.focus();
-                barcodeInput.select();
-            }
-
-            // Escape - Clear barcode input
-            if (e.key === 'Escape') {
-                const barcodeInput = document.getElementById('manual-barcode-input');
-                if (document.activeElement === barcodeInput) {
-                    barcodeInput.value = '';
-                } else {
-                    barcodeInput.focus();
-                }
-            }
-        });
-    }
-
     // Utility Functions
     formatNaira(amount) {
         const num = parseFloat(amount) || 0;
@@ -1497,11 +1115,10 @@ class AdvancedPOSSystem {
 
         // Create toast
         const toast = document.createElement('div');
-        toast.className = `toast-message fixed top-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300 animate-slideInRight ${
+        toast.className = `toast-message fixed top-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300 ${
             type === 'success' ? 'bg-green-500 text-white' :
             type === 'error' ? 'bg-red-500 text-white' :
             type === 'info' ? 'bg-blue-500 text-white' :
-            type === 'warning' ? 'bg-yellow-500 text-white' :
             'bg-gray-500 text-white'
         }`;
         toast.textContent = message;
@@ -1510,9 +1127,7 @@ class AdvancedPOSSystem {
 
         // Auto remove
         setTimeout(() => {
-            toast.classList.remove('animate-slideInRight');
-            toast.classList.add('animate-fadeOut');
-            setTimeout(() => toast.remove(), 300);
+            toast.remove();
         }, 3000);
     }
 
@@ -1535,7 +1150,7 @@ class AdvancedPOSSystem {
 
 // Initialize POS System when page loads
 document.addEventListener('DOMContentLoaded', () => {
-    window.posSystem = new AdvancedPOSSystem();
+    window.posSystem = new POSSystem();
 });
 </script>
 
@@ -1599,52 +1214,11 @@ document.addEventListener('DOMContentLoaded', () => {
     to { transform: translateX(100%); opacity: 0; }
 }
 
-@keyframes slideInRight {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes fadeOut {
-    from { opacity: 1; }
-    to { opacity: 0; }
-}
-
-.animate-fadeIn {
-    animation: fadeIn 0.3s ease;
-}
-
-.animate-slideInRight {
-    animation: slideInRight 0.3s ease-out;
-}
-
-.animate-fadeOut {
-    animation: fadeOut 0.3s ease-out;
-}
-
 /* Print styles */
 @media print {
     .no-print {
         display: none !important;
     }
-}
-
-/* Custom scrollbar */
-#cart-items-container::-webkit-scrollbar {
-    width: 6px;
-}
-
-#cart-items-container::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 3px;
-}
-
-#cart-items-container::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 3px;
-}
-
-#cart-items-container::-webkit-scrollbar-thumb:hover {
-    background: #a1a1a1;
 }
 </style>
 {% endblock %}

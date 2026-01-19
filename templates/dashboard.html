@@ -106,9 +106,9 @@
                             <p class="font-medium text-sm md:text-base text-gray-800 truncate">{{ product.name }}</p>
                             <div class="flex items-center mt-1">
                                 <span class="text-xs md:text-sm text-gray-600">Stock: {{ product.stock_quantity }}</span>
-                                {% if product.min_stock_level %}
+                                {% if product.reorder_level %}
                                 <span class="mx-2 text-gray-300">•</span>
-                                <span class="text-xs text-gray-500">Reorder: {{ product.min_stock_level }}</span>
+                                <span class="text-xs text-gray-500">Reorder: {{ product.reorder_level }}</span>
                                 {% endif %}
                             </div>
                         </div>

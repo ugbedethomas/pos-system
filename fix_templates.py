@@ -1,44 +1,67 @@
+# fix_templates.py
 import os
-import re
 
+print("=" * 60)
+print("🛠️  Fixing Template Files")
+print("=" * 60)
 
-def fix_template(filepath):
-    with open(filepath, 'r', encoding='utf-8') as f:
-        content = f.read()
+# Fix all template files
+template_dir = 'templates'
+files_to_fix = ['inventory.html', 'products.html', 'dashboard.html']
 
-    # Replace format_naira function calls
-    # Pattern: {{ format_naira(some_variable) }}
-    content = re.sub(r'\{\{\s*format_naira\((.*?)\)\s*\}\}', r'{{ format_naira(\1) }}', content)
+for filename in files_to_fix:
+    filepath = os.path.join(template_dir, filename)
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
 
-    # Replace old dollar formatting
-    content = re.sub(r'\{\{\s*\"%\\.2f\"\s*\|\s*format\((.*?)\)\s*\}\}', r'{{ format_naira(\1) }}', content)
+            if 'min_stock_level' in content:
+                new_content = content.replace('min_stock_level', 'reorder_level')
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(new_content)
+                print(f"✅ Fixed {filename}")
+            else:
+                print(f"✓ {filename} already uses reorder_level")
+        except UnicodeDecodeError:
+            # Try with different encoding
+            try:
+                with open(filepath, 'r', encoding='latin-1') as f:
+                    content = f.read()
 
-    # Replace ${{ with {{ format_naira(
-    content = re.sub(r'\$\{\{\s*(.*?)\s*\}\}', r'{{ format_naira(\1) }}', content)
+                if 'min_stock_level' in content:
+                    new_content = content.replace('min_stock_level', 'reorder_level')
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        f.write(new_content)
+                    print(f"✅ Fixed {filename} (latin-1 encoding)")
+                else:
+                    print(f"✓ {filename} already uses reorder_level")
+            except Exception as e:
+                print(f"⚠️ Could not read {filename}: {e}")
+    else:
+        print(f"⚠️ {filename} not found")
 
-    # Simple $ replacement
-    content = content.replace('${{', '{{ format_naira(')
-    content = content.replace('}}$', ') }}')
+# Also fix crud.py with proper encoding
+print("\n📝 Fixing crud.py...")
+crud_path = 'app/crud.py'
+if os.path.exists(crud_path):
+    try:
+        with open(crud_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except UnicodeDecodeError:
+        with open(crud_path, 'r', encoding='latin-1') as f:
+            content = f.read()
 
-    with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(content)
+    if 'min_stock_level' in content:
+        new_content = content.replace('min_stock_level', 'reorder_level')
+        with open(crud_path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+        print("✅ Fixed crud.py")
+    else:
+        print("✓ crud.py already uses reorder_level")
+else:
+    print("⚠️ crud.py not found")
 
-    return content.count('format_naira')
-
-
-print("🔄 Fixing templates for Naira formatting...")
-
-templates_dir = "templates"
-updated_files = 0
-total_replacements = 0
-
-for filename in os.listdir(templates_dir):
-    if filename.endswith('.html'):
-        filepath = os.path.join(templates_dir, filename)
-        replacements = fix_template(filepath)
-        updated_files += 1
-        total_replacements += replacements
-        print(f"✅ {filename}: {replacements} replacements")
-
-print(f"\n🎉 Updated {updated_files} files")
-print("💡 Remember to add format_naira to render_template calls!")
+print("\n" + "=" * 60)
+print("🎉 Template fixes complete! Restart your server.")
+print("=" * 60)

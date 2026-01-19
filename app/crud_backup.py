@@ -1,9 +1,3 @@
-﻿from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, func
-from typing import List, Optional
-from datetime import datetime, date
-
-from app import models, schemas
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, func
 from typing import List, Optional
@@ -15,7 +9,8 @@ from app import models  # absolute import
 # In crud.py
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-# from barcode_utils import barcode_generator  # Commented out for now
+import models
+from barcode_utils import barcode_generator
 
 
 
@@ -24,52 +19,8 @@ def get_product(db: Session, product_id: int):
     return db.query(models.Product).filter(models.Product.id == product_id).first()
 
 
-# app/crud.py - Update this function
-def get_products(db, skip: int = 0, limit: int = 100):
-    """Get products with schema error handling"""
-    try:
-        # Try normal query
-        return db.query(models.Product).filter(
-            models.Product.is_active == True
-        ).offset(skip).limit(limit).all()
-    except Exception as e:
-        # Schema error - use fallback
-        print(f"⚠️ Schema error in get_products, using fallback: {e}")
-        try:
-            # Try without is_active filter
-            return db.query(models.Product).offset(skip).limit(limit).all()
-        except Exception:
-            # Ultimate fallback - raw SQL
-            result = db.execute(
-                "SELECT id, name, description, price, stock_quantity, category, sku FROM products LIMIT :limit OFFSET :skip",
-                {"limit": limit, "skip": skip}
-            )
-            # Convert to Product-like objects
-            products = []
-            for row in result:
-                product = models.Product()
-                product.id = row[0]
-                product.name = row[1]
-                product.description = row[2]
-                product.price = row[3]
-                product.stock_quantity = row[4]
-                product.category = row[5]
-                product.sku = row[6]
-                products.append(product)
-            return products
-
-def get_product_by_barcode(db, barcode: str):
-    """Get product by barcode"""
-    try:
-        return db.query(models.Product).filter(
-            models.Product.barcode == barcode,
-            models.Product.is_active == True
-        ).first()
-    except Exception:
-        # Fallback if is_active doesn't exist
-        return db.query(models.Product).filter(
-            models.Product.barcode == barcode
-        ).first()
+def get_products(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Product).filter(models.Product.is_active == True).offset(skip).limit(limit).all()
 
 
 def create_product(db: Session, product: schemas.ProductCreate):
@@ -358,7 +309,7 @@ def get_stock_movements(db: Session, product_id: Optional[int] = None, skip: int
 
 def get_low_stock_products(db: Session):
     return db.query(models.Product).filter(
-        models.Product.stock_quantity <= models.Product.reorder_level,
+        models.Product.stock_quantity <= models.Product.min_stock_level,
         models.Product.is_active == True
     ).all()
 
@@ -376,7 +327,7 @@ def get_inventory_report(db: Session):
         # Determine status
         if product.stock_quantity <= 0:
             status = "OUT"
-        elif product.stock_quantity <= product.reorder_level:
+        elif product.stock_quantity <= product.min_stock_level:
             status = "LOW"
         else:
             status = "OK"
@@ -385,7 +336,7 @@ def get_inventory_report(db: Session):
             "product_id": product.id,
             "product_name": product.name,
             "current_stock": product.stock_quantity,
-            "reorder_level": product.reorder_level,
+            "min_stock_level": product.min_stock_level,
             "total_value": product.stock_quantity * product.price,
             "status": status,
             "last_movement": latest_movement.created_at if latest_movement else None
@@ -399,7 +350,7 @@ def update_stock_level(db: Session, product_id: int, new_min_level: int):
     if not product:
         return None
 
-    product.reorder_level = new_min_level
+    product.min_stock_level = new_min_level
     db.commit()
     db.refresh(product)
     return product
@@ -573,81 +524,3 @@ def delete_product_and_barcode(db: Session, product_id: int):
     db.commit()
 
     return True
-
-def get_product_by_barcode(db: Session, barcode: str):
-    """Get product by barcode"""
-    return db.query(models.Product).filter(
-        models.Product.barcode == barcode
-    ).first()
-
-# In app/crud.py
-
-def get_customers(db, skip: int = 0, limit: int = 100):
-    """Get customers with schema error handling"""
-    try:
-        return db.query(models.Customer).offset(skip).limit(limit).all()
-    except Exception as e:
-        print(f"⚠️ Schema error in get_customers: {e}")
-        # Try with explicit column selection
-        try:
-            return db.query(
-                models.Customer.id,
-                models.Customer.name,
-                models.Customer.phone,
-                models.Customer.email
-            ).offset(skip).limit(limit).all()
-        except Exception:
-            # Ultimate fallback - raw SQL
-            result = db.execute(
-                "SELECT id, name, phone, email FROM customers LIMIT :limit OFFSET :skip",
-                {"limit": limit, "skip": skip}
-            )
-            customers = []
-            for row in result:
-                customer = models.Customer()
-                customer.id = row[0]
-                customer.name = row[1]
-                customer.phone = row[2]
-                customer.email = row[3]
-                customers.append(customer)
-            return customers
-
-def get_products(db, skip: int = 0, limit: int = 100):
-    """Get products with schema error handling"""
-    try:
-        return db.query(models.Product).filter(
-            models.Product.is_active == True
-        ).offset(skip).limit(limit).all()
-    except Exception as e:
-        print(f"⚠️ Schema error in get_products: {e}")
-        try:
-            # Try without is_active filter
-            return db.query(models.Product).offset(skip).limit(limit).all()
-        except Exception:
-            # Fallback to basic columns
-            try:
-                return db.query(
-                    models.Product.id,
-                    models.Product.name,
-                    models.Product.price,
-                    models.Product.stock_quantity,
-                    models.Product.category,
-                    models.Product.sku
-                ).offset(skip).limit(limit).all()
-            except Exception:
-                # Raw SQL fallback
-                result = db.execute(
-                    "SELECT id, name, price, stock_quantity, category, sku FROM products LIMIT :limit OFFSET :skip",
-                    {"limit": limit, "skip": skip}
-                )
-                products = []
-                for row in result:
-                    product = models.Product()
-                    product.id = row[0]
-                    product.name = row[1]
-                    product.price = row[2]
-                    product.stock_quantity = row[3]
-                    product.category = row[4]
-                    product.sku = row[5]
-                    products.append(product)
-                return products

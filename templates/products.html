@@ -18,261 +18,1192 @@
 </div>
 {% endif %}
 
-<div class="mb-6">
-    <div class="flex justify-between items-center">
-        <h3 class="text-lg font-semibold text-gray-800">All Products</h3>
-        <button onclick="showAddProductModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
-            <i class="fas fa-plus mr-2"></i> Add Product
-        </button>
-    </div>
-</div>
-
-<div class="bg-white rounded-xl shadow overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
-            <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-            </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
-            {% for product in products %}
-            <tr class="hover:bg-gray-50">
-                <td class="px-6 py-4 whitespace-nowrap">
+<!-- Main Layout -->
+<div class="flex flex-col lg:flex-row gap-6">
+    <!-- Left Column: Products List -->
+    <div class="lg:w-2/3">
+        <!-- Action Bar -->
+        <div class="bg-white rounded-xl shadow-sm p-4 lg:p-6 mb-6">
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                <div class="flex-1">
                     <div class="flex items-center">
-                        <div class="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                            <i class="fas fa-box text-gray-400"></i>
+                        <div class="bg-indigo-100 p-3 rounded-lg">
+                            <i class="fas fa-boxes text-indigo-600 text-xl"></i>
                         </div>
                         <div class="ml-4">
-                            <div class="text-sm font-medium text-gray-900">{{ product.name }}</div>
-                            <div class="text-sm text-gray-500">{{ product.description|truncate(30) if product.description else 'No description' }}</div>
+                            <h3 class="text-lg lg:text-xl font-semibold text-gray-800">Products Inventory</h3>
+                            <p class="text-gray-600 mt-1">{{ products|length }} product{% if products|length != 1 %}s{% endif %} in stock</p>
                         </div>
                     </div>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                    <span class="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded">{{ product.sku }}</span>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {{ product.category or 'Uncategorized' }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    {{ format_naira(product.price) }}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="flex items-center">
-                        <span class="text-sm font-medium">{{ product.stock_quantity }}</span>
-                        {% if product.stock_quantity <= (product.reorder_level or 10) %}
-                        <span class="ml-2 px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded">Low</span>
-                        {% endif %}
-                    </div>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                    <span class="px-2 py-1 text-xs rounded-full {% if product.stock_quantity > 0 %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
-                        {{ 'In Stock' if product.stock_quantity > 0 else 'Out of Stock' }}
-                    </span>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div class="flex space-x-2">
-                        <a href="/products/edit/{{ product.id }}"
-                           class="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm">
-                            <i class="fas fa-edit mr-1"></i>Edit
-                        </a>
-                        <button onclick="showDeleteModal({{ product.id }}, '{{ product.name }}')"
-                                class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm">
-                            <i class="fas fa-trash mr-1"></i>Delete
-                        </button>
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    {% if products|length == 0 %}
-    <div class="text-center py-12">
-        <i class="fas fa-box-open text-gray-300 text-5xl mb-4"></i>
-        <h3 class="text-lg font-medium text-gray-900 mb-2">No products yet</h3>
-        <p class="text-gray-500 mb-4">Add your first product to get started</p>
-        <button onclick="showAddProductModal()" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700">
-            <i class="fas fa-plus mr-2"></i> Add First Product
-        </button>
-    </div>
-    {% endif %}
-</div>
-
-<!-- Add Product Modal -->
-<div id="addProductModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4">
-        <h3 class="text-xl font-bold text-gray-800 mb-4">Add New Product</h3>
-
-        <form method="POST" action="/products/create">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
-                    <input type="text" name="name" required
-                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                           placeholder="e.g., Coca-Cola 50cl">
                 </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">SKU *</label>
-                    <input type="text" name="sku" required
-                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                           placeholder="e.g., COKE-50CL-001">
+                <div class="flex flex-wrap gap-2">
+                    <!-- Quick Barcode Scan -->
+                    <button onclick="startBarcodeScan()"
+                            class="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 font-medium flex items-center gap-2 transition-all shadow-sm">
+                        <i class="fas fa-barcode"></i>
+                        <span class="hidden lg:inline">Quick Scan</span>
+                        <span class="lg:hidden">Scan</span>
+                    </button>
+
+                    <!-- Add Product Button -->
+                    <button onclick="showAddProductForm()"
+                            class="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:from-indigo-600 hover:to-purple-700 font-medium flex items-center gap-2 transition-all shadow-sm">
+                        <i class="fas fa-plus"></i>
+                        <span class="hidden lg:inline">Add Product</span>
+                        <span class="lg:hidden">Add</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search and Filter -->
+            <div class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <!-- Product Search -->
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fas fa-search text-gray-400"></i>
+                    </div>
+                    <input type="text"
+                           id="product-search"
+                           placeholder="Search products..."
+                           class="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Price (₦) *</label>
-                        <input type="number" step="0.01" name="price" required
-                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                               placeholder="0.00">
+                <!-- Barcode Search -->
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fas fa-barcode text-gray-400"></i>
                     </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Initial Stock</label>
-                        <input type="number" name="stock_quantity" value="0" min="0"
-                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    </div>
+                    <input type="text"
+                           id="barcode-search"
+                           placeholder="Search by barcode..."
+                           class="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
                 </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                    <select name="category" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <!-- Category Filter -->
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fas fa-filter text-gray-400"></i>
+                    </div>
+                    <select id="category-filter"
+                            class="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 appearance-none bg-white">
+                        <option value="">All Categories</option>
                         <option value="Beverages">Beverages</option>
                         <option value="Food">Food</option>
                         <option value="Snacks">Snacks</option>
                         <option value="Household">Household</option>
                         <option value="Personal Care">Personal Care</option>
+                        <option value="Electronics">Electronics</option>
+                        <option value="Clothing">Clothing</option>
                         <option value="Other">Other</option>
                     </select>
+                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                        <i class="fas fa-chevron-down text-gray-400"></i>
+                    </div>
                 </div>
+            </div>
+        </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                    <textarea name="description" rows="3"
-                              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                              placeholder="Product description (optional)"></textarea>
+        <!-- Products Table -->
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Product
+                            </th>
+                            <th class="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Barcode
+                            </th>
+                            <th class="hidden lg:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Category
+                            </th>
+                            <th class="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Price
+                            </th>
+                            <th class="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Stock
+                            </th>
+                            <th class="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Actions
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200" id="products-table-body">
+                        {% for product in products %}
+                        <tr class="hover:bg-gray-50 product-row transition-colors"
+                            data-name="{{ product.name|lower }}"
+                            data-sku="{{ product.sku|default('', true)|lower }}"
+                            data-barcode="{{ product.barcode|default('', true)|lower }}"
+                            data-category="{{ product.category|default('', true)|lower }}">
+                            <!-- Product Name -->
+                            <td class="px-4 lg:px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg flex items-center justify-center">
+                                        {% if product.image_url %}
+                                        <img src="{{ product.image_url }}" alt="{{ product.name }}" class="h-10 w-10 object-cover rounded-lg">
+                                        {% else %}
+                                        <i class="fas fa-box text-indigo-400"></i>
+                                        {% endif %}
+                                    </div>
+                                    <div class="ml-3 lg:ml-4">
+                                        <div class="text-sm font-medium text-gray-900">{{ product.name }}</div>
+                                        <div class="text-xs text-gray-500 truncate max-w-[150px] lg:max-w-xs">
+                                            {{ product.description|truncate(30) if product.description else 'No description' }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <!-- Barcode -->
+                            <td class="px-4 lg:px-6 py-4 whitespace-nowrap">
+                                {% if product.barcode %}
+                                <div class="flex items-center group">
+                                    <div class="relative">
+                                        <span class="text-xs font-mono bg-gray-50 px-2 py-1.5 rounded border border-gray-200">
+                                            {{ product.barcode }}
+                                        </span>
+                                    </div>
+                                    <button onclick="copyToClipboard('{{ product.barcode }}')"
+                                            class="ml-2 text-gray-400 hover:text-blue-500 transition-colors"
+                                            title="Copy barcode">
+                                        <i class="fas fa-copy text-sm"></i>
+                                    </button>
+                                </div>
+                                {% else %}
+                                <div class="flex items-center">
+                                    <span class="text-xs text-gray-400 italic">No barcode</span>
+                                    <button onclick="addBarcodeToProduct({{ product.id }}, '{{ product.name|escapejs }}')"
+                                            class="ml-2 text-xs text-blue-600 hover:text-blue-800 transition-colors">
+                                        <i class="fas fa-plus-circle mr-1"></i>Add
+                                    </button>
+                                </div>
+                                {% endif %}
+                            </td>
+
+                            <!-- Category (hidden on mobile) -->
+                            <td class="hidden lg:table-cell px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">
+                                    {{ product.category or 'Uncategorized' }}
+                                </span>
+                            </td>
+
+                            <!-- Price -->
+                            <td class="px-4 lg:px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-bold text-gray-900">{{ format_naira(product.price) }}</div>
+                                {% if product.cost_price %}
+                                <div class="text-xs text-gray-500">Cost: {{ format_naira(product.cost_price) }}</div>
+                                {% endif %}
+                            </td>
+
+                            <!-- Stock -->
+                            <td class="px-4 lg:px-6 py-4 whitespace-nowrap">
+                                <div class="flex flex-col">
+                                    <span class="text-sm font-medium">{{ product.stock_quantity }}</span>
+                                    {% if product.reorder_level and product.stock_quantity <= product.reorder_level %}
+                                    <span class="text-xs text-yellow-600 mt-1">
+                                        <i class="fas fa-exclamation-triangle mr-1"></i>Low stock
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </td>
+
+                            <!-- Actions -->
+                            <td class="px-4 lg:px-6 py-4 whitespace-nowrap">
+                                <div class="flex space-x-1 lg:space-x-2">
+                                    <a href="/products/edit/{{ product.id }}"
+                                       class="px-2 lg:px-3 py-1 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 text-xs lg:text-sm flex items-center transition-colors">
+                                        <i class="fas fa-edit mr-1"></i>
+                                        <span class="hidden lg:inline">Edit</span>
+                                        <span class="lg:hidden">Edit</span>
+                                    </a>
+                                    <button onclick="showDeleteModal({{ product.id }}, '{{ product.name|escapejs }}')"
+                                            class="px-2 lg:px-3 py-1 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 text-xs lg:text-sm flex items-center transition-colors">
+                                        <i class="fas fa-trash mr-1"></i>
+                                        <span class="hidden lg:inline">Delete</span>
+                                        <span class="lg:hidden">Del</span>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Empty State -->
+            {% if products|length == 0 %}
+            <div class="text-center py-12">
+                <div class="mb-4">
+                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                        <i class="fas fa-box-open text-gray-400 text-2xl"></i>
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">No products found</h3>
+                <p class="text-gray-600 mb-6 max-w-md mx-auto">
+                    Get started by adding your first product. You can use the barcode scanner to quickly add inventory items.
+                </p>
+                <button onclick="showAddProductForm()"
+                        class="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 font-medium flex items-center gap-2 mx-auto shadow-sm">
+                    <i class="fas fa-plus"></i>
+                    Add First Product
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Right Column: Add Product Form (Initially Hidden) -->
+    <div id="addProductFormContainer" class="lg:w-1/3 hidden">
+        <div class="bg-white rounded-xl shadow-lg sticky top-6 border border-gray-200">
+            <!-- Form Header -->
+            <div class="px-4 lg:px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center">
+                        <div class="bg-white p-2 rounded-lg shadow-sm mr-3">
+                            <i class="fas fa-plus-circle text-indigo-600"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-gray-800">Add New Product</h3>
+                            <p class="text-xs text-gray-600">Fill in product details including barcode</p>
+                        </div>
+                    </div>
+                    <button onclick="hideAddProductForm()"
+                            class="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-white transition-colors">
+                        <i class="fas fa-times text-lg"></i>
+                    </button>
                 </div>
             </div>
 
-            <div class="flex space-x-3 mt-6">
-                <button type="submit" class="flex-1 bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700">
-                    <i class="fas fa-save mr-2"></i>Save Product
-                </button>
-                <button type="button" onclick="closeAddProductModal()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg hover:bg-gray-300">
-                    <i class="fas fa-times mr-2"></i>Cancel
-                </button>
-            </div>
-        </form>
+            <!-- Form Content -->
+            <form id="addProductForm" method="POST" action="/products/create"
+                  class="p-4 lg:p-6 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+                <!-- CSRF Protection -->
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+
+                <!-- Basic Information -->
+                <div class="space-y-4">
+                    <h4 class="text-sm font-medium text-gray-700 flex items-center">
+                        <i class="fas fa-info-circle text-indigo-500 mr-2"></i>
+                        Basic Information
+                    </h4>
+
+                    <!-- Product Name -->
+                    <div>
+                        <label for="productName" class="block text-sm font-medium text-gray-700 mb-1">
+                            Product Name <span class="text-red-500">*</span>
+                        </label>
+                        <input type="text" id="productName" name="name" required
+                               class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                               placeholder="Enter product name">
+                    </div>
+
+                    <!-- SKU -->
+                    <div>
+                        <label for="productSKU" class="block text-sm font-medium text-gray-700 mb-1">
+                            SKU <span class="text-red-500">*</span>
+                        </label>
+                        <input type="text" id="productSKU" name="sku" required
+                               class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                               placeholder="Enter SKU">
+                    </div>
+
+                    <!-- Category -->
+                    <div>
+                        <label for="productCategory" class="block text-sm font-medium text-gray-700 mb-1">
+                            Category
+                        </label>
+                        <select id="productCategory" name="category"
+                                class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white">
+                            <option value="Uncategorized">Uncategorized</option>
+                            <option value="Beverages">Beverages</option>
+                            <option value="Food">Food</option>
+                            <option value="Snacks">Snacks</option>
+                            <option value="Household">Household</option>
+                            <option value="Personal Care">Personal Care</option>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Clothing">Clothing</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Barcode Section -->
+                <div class="space-y-4 pt-4">
+                    <div class="flex justify-between items-center">
+                        <h4 class="text-sm font-medium text-gray-700 flex items-center">
+                            <i class="fas fa-barcode text-green-500 mr-2"></i>
+                            Barcode Information
+                        </h4>
+                        <span class="text-xs text-gray-500">(Optional)</span>
+                    </div>
+
+                    <!-- Barcode Input -->
+                    <div class="space-y-3">
+                        <!-- Barcode Input Field -->
+                        <div>
+                            <label for="productBarcode" class="block text-sm font-medium text-gray-700 mb-1">
+                                Barcode Number
+                            </label>
+                            <div class="flex gap-2">
+                                <input type="text" id="productBarcode" name="barcode"
+                                       class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                       placeholder="Enter EAN-13/UPC barcode">
+                                <button type="button" onclick="scanBarcode()"
+                                        class="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                                    <i class="fas fa-camera"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Barcode Actions -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <button type="button" onclick="generateBarcode()"
+                                    class="px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center justify-center gap-2 transition-colors">
+                                <i class="fas fa-barcode"></i>
+                                Generate EAN-13
+                            </button>
+                            <button type="button" onclick="validateBarcode()"
+                                    class="px-4 py-2.5 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium flex items-center justify-center gap-2 transition-colors">
+                                <i class="fas fa-check-circle"></i>
+                                Validate
+                            </button>
+                        </div>
+
+                        <!-- Barcode Status -->
+                        <div id="barcodeStatus" class="hidden">
+                            <div class="flex items-center p-3 rounded-lg text-sm">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                <span id="barcodeMessage"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pricing & Stock -->
+                <div class="space-y-4 pt-4">
+                    <h4 class="text-sm font-medium text-gray-700 flex items-center">
+                        <i class="fas fa-money-bill-wave text-purple-500 mr-2"></i>
+                        Pricing & Stock
+                    </h4>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <!-- Selling Price -->
+                        <div>
+                            <label for="productPrice" class="block text-sm font-medium text-gray-700 mb-1">
+                                Price (₦) <span class="text-red-500">*</span>
+                            </label>
+                            <input type="number" id="productPrice" name="price" step="0.01" min="0" required
+                                   class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                   placeholder="0.00">
+                        </div>
+
+                        <!-- Stock Quantity -->
+                        <div>
+                            <label for="productStock" class="block text-sm font-medium text-gray-700 mb-1">
+                                Stock Quantity
+                            </label>
+                            <input type="number" id="productStock" name="stock_quantity" min="0"
+                                   class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                   value="0">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Information -->
+                <div class="space-y-4 pt-4">
+                    <h4 class="text-sm font-medium text-gray-700 flex items-center">
+                        <i class="fas fa-align-left text-blue-500 mr-2"></i>
+                        Additional Information
+                    </h4>
+
+                    <!-- Description -->
+                    <div>
+                        <label for="productDescription" class="block text-sm font-medium text-gray-700 mb-1">
+                            Description
+                        </label>
+                        <textarea id="productDescription" name="description" rows="3"
+                                  class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                  placeholder="Enter product description..."></textarea>
+                    </div>
+
+                    <!-- Cost Price (Optional) -->
+                    <div>
+                        <label for="productCost" class="block text-sm font-medium text-gray-700 mb-1">
+                            Cost Price (₦) <span class="text-gray-400 text-xs">(Optional)</span>
+                        </label>
+                        <input type="number" id="productCost" name="cost_price" step="0.01" min="0"
+                               class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                               placeholder="0.00">
+                    </div>
+
+                    <!-- Reorder Level (Optional) -->
+                    <div>
+                        <label for="productReorder" class="block text-sm font-medium text-gray-700 mb-1">
+                            Reorder Level <span class="text-gray-400 text-xs">(Optional)</span>
+                        </label>
+                        <input type="number" id="productReorder" name="reorder_level" min="0"
+                               class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                               placeholder="10"
+                               value="10">
+                    </div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="pt-6 border-t border-gray-200">
+                    <div class="flex gap-3">
+                        <button type="button" onclick="hideAddProductForm()"
+                                class="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:from-indigo-600 hover:to-purple-700 font-medium flex items-center justify-center gap-2 transition-all">
+                            <i class="fas fa-save"></i>
+                            Save Product
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
 <!-- Delete Confirmation Modal -->
-<div id="deleteModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-lg max-w-md w-full">
+<div id="deleteModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl shadow-lg max-w-md w-full mx-auto animate-slideIn">
         <div class="p-6">
-            <div class="text-center mb-6">
-                <i class="fas fa-exclamation-triangle text-3xl text-red-600 mb-4"></i>
-                <h3 class="text-xl font-bold text-gray-800">Delete Product</h3>
-                <p class="text-gray-600 mt-2" id="deleteMessage">Are you sure you want to delete this product?</p>
+            <div class="text-center mb-4">
+                <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-4">
+                    <i class="fas fa-exclamation-triangle text-red-600 text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Delete Product</h3>
+                <p id="deleteMessage" class="text-gray-600 mb-6"></p>
             </div>
-
-            <div class="flex justify-end space-x-3">
+            <div class="flex gap-3">
                 <button onclick="closeDeleteModal()"
-                        class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">
+                        class="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors">
                     Cancel
                 </button>
                 <button onclick="deleteProduct()"
-                        class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
-                    Delete Product
+                        class="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors">
+                    Delete
                 </button>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Barcode Scanner Modal -->
+<div id="barcodeScannerModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl shadow-lg max-w-2xl w-full mx-auto animate-slideIn">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">Scan Barcode</h3>
+                    <p class="text-gray-600">Use camera or enter barcode manually</p>
+                </div>
+                <button onclick="closeBarcodeScanner()"
+                        class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <!-- Camera Preview -->
+                <div id="cameraPreviewContainer" class="hidden">
+                    <div class="bg-black rounded-lg overflow-hidden">
+                        <video id="cameraPreview" width="100%" autoplay playsinline></video>
+                    </div>
+                    <div class="mt-2 text-center">
+                        <p id="scannerStatus" class="text-sm text-gray-600">Camera is off</p>
+                    </div>
+                </div>
+
+                <!-- Manual Input -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-keyboard mr-2"></i>Enter Barcode Manually
+                    </label>
+                    <div class="flex gap-2">
+                        <input type="text" id="manualBarcodeInput"
+                               class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                               placeholder="Enter barcode...">
+                        <button onclick="useManualBarcode()"
+                                class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">
+                            Use
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="grid grid-cols-2 gap-3 pt-4">
+                    <button id="startCameraBtn" onclick="startCamera()"
+                            class="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center gap-2">
+                        <i class="fas fa-camera"></i>
+                        Start Camera
+                    </button>
+                    <button id="stopCameraBtn" onclick="stopCamera()"
+                            class="px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center justify-center gap-2 hidden">
+                        <i class="fas fa-stop"></i>
+                        Stop Camera
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Custom Styles -->
+<style>
+    /* Animations */
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .animate-slideIn {
+        animation: slideIn 0.3s ease-out;
+    }
+
+    /* Form container animation */
+    #addProductFormContainer {
+        transition: transform 0.3s ease-out;
+        transform: translateX(100%);
+    }
+
+    #addProductFormContainer.show {
+        transform: translateX(0);
+    }
+
+    /* Custom scrollbar for form */
+    #addProductFormContainer form::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    #addProductFormContainer form::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+    }
+
+    #addProductFormContainer form::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 3px;
+    }
+
+    #addProductFormContainer form::-webkit-scrollbar-thumb:hover {
+        background: #a1a1a1;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 1024px) {
+        #addProductFormContainer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            max-width: 100%;
+            z-index: 50;
+            background: white;
+            overflow-y: auto;
+        }
+
+        .lg\:w-2\/3 {
+            width: 100%;
+        }
+    }
+
+    /* Table row hover effect */
+    .product-row:hover {
+        background-color: #f9fafb;
+    }
+</style>
+
 <script>
-let productToDelete = null;
+    // Product Management Functions
+    let productToDelete = null;
+    let isFormVisible = false;
+    let cameraStream = null;
 
-function showAddProductModal() {
-    document.getElementById('addProductModal').classList.remove('hidden');
-}
+    // Show/Hide Add Product Form
+    function showAddProductForm() {
+        const formContainer = document.getElementById('addProductFormContainer');
+        formContainer.classList.remove('hidden');
+        formContainer.classList.add('show');
 
-function closeAddProductModal() {
-    document.getElementById('addProductModal').classList.add('hidden');
-    // Clear form on close
-    document.querySelector('#addProductModal form').reset();
-}
+        // Focus on first input
+        setTimeout(() => {
+            document.getElementById('productName').focus();
+        }, 100);
 
-function showDeleteModal(productId, productName) {
-    productToDelete = productId;
-    document.getElementById('deleteMessage').textContent =
-        `Are you sure you want to delete "${productName}"? This action cannot be undone.`;
-    document.getElementById('deleteModal').classList.remove('hidden');
-}
+        isFormVisible = true;
+    }
 
-function closeDeleteModal() {
-    document.getElementById('deleteModal').classList.add('hidden');
-    productToDelete = null;
-}
+    function hideAddProductForm() {
+        const formContainer = document.getElementById('addProductFormContainer');
+        formContainer.classList.remove('show');
 
-async function deleteProduct() {
-    if (!productToDelete) return;
+        // Wait for animation to complete before hiding
+        setTimeout(() => {
+            formContainer.classList.add('hidden');
+        }, 300);
 
-    try {
-        const response = await fetch(`/products/delete/${productToDelete}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
+        isFormVisible = false;
+    }
+
+    // Generate Barcode
+    function generateBarcode() {
+        // Generate a valid EAN-13 barcode (13 digits)
+        let barcode = '';
+
+        // Generate first 12 digits
+        for (let i = 0; i < 12; i++) {
+            barcode += Math.floor(Math.random() * 10);
+        }
+
+        // Calculate check digit (EAN-13 algorithm)
+        let sum = 0;
+        for (let i = 0; i < 12; i++) {
+            const digit = parseInt(barcode[i]);
+            if (i % 2 === 0) {
+                sum += digit;
+            } else {
+                sum += digit * 3;
+            }
+        }
+
+        const checkDigit = (10 - (sum % 10)) % 10;
+        barcode += checkDigit;
+
+        // Set the barcode in the input field
+        document.getElementById('productBarcode').value = barcode;
+
+        // Show success message
+        showBarcodeStatus('success', `Generated EAN-13 barcode: ${barcode}`);
+
+        // Auto-validate
+        setTimeout(() => validateBarcode(), 100);
+    }
+
+    // Validate barcode
+    function validateBarcode() {
+        const barcode = document.getElementById('productBarcode').value.trim();
+
+        if (!barcode) {
+            showBarcodeStatus('error', 'Please enter or generate a barcode');
+            return;
+        }
+
+        // Remove any non-digit characters
+        const cleanBarcode = barcode.replace(/\D/g, '');
+
+        // Check length
+        if (cleanBarcode.length === 13) {
+            // Validate EAN-13 check digit
+            const checkDigit = validateEAN13(cleanBarcode);
+            if (checkDigit.isValid) {
+                showBarcodeStatus('success', `Valid EAN-13 barcode ✓`);
+            } else {
+                showBarcodeStatus('warning', `Invalid EAN-13 check digit`);
+            }
+        } else if (cleanBarcode.length === 12) {
+            // Validate UPC-A check digit
+            const checkDigit = validateUPCA(cleanBarcode);
+            if (checkDigit.isValid) {
+                showBarcodeStatus('success', `Valid UPC-A barcode ✓`);
+            } else {
+                showBarcodeStatus('warning', `Invalid UPC-A check digit`);
+            }
+        } else if (cleanBarcode.length === 8) {
+            showBarcodeStatus('info', 'EAN-8 barcode detected');
+        } else if (cleanBarcode.length > 0) {
+            showBarcodeStatus('info', `Custom barcode (${cleanBarcode.length} digits)`);
+        }
+    }
+
+    // Validate EAN-13 barcode
+    function validateEAN13(barcode) {
+        const digits = barcode.split('').map(Number);
+        const checkDigit = digits.pop();
+
+        let sum = 0;
+        for (let i = 0; i < 12; i++) {
+            if (i % 2 === 0) {
+                sum += digits[i];
+            } else {
+                sum += digits[i] * 3;
+            }
+        }
+
+        const calculatedCheckDigit = (10 - (sum % 10)) % 10;
+
+        return {
+            isValid: checkDigit === calculatedCheckDigit,
+            checkDigit: checkDigit,
+            expected: calculatedCheckDigit
+        };
+    }
+
+    // Validate UPC-A barcode
+    function validateUPCA(barcode) {
+        const digits = barcode.split('').map(Number);
+        const checkDigit = digits.pop();
+
+        let sum = 0;
+        for (let i = 0; i < 11; i++) {
+            if (i % 2 === 0) {
+                sum += digits[i] * 3;
+            } else {
+                sum += digits[i];
+            }
+        }
+
+        const calculatedCheckDigit = (10 - (sum % 10)) % 10;
+
+        return {
+            isValid: checkDigit === calculatedCheckDigit,
+            checkDigit: checkDigit,
+            expected: calculatedCheckDigit
+        };
+    }
+
+    // Show barcode status message
+    function showBarcodeStatus(type, message) {
+        const statusDiv = document.getElementById('barcodeStatus');
+        const messageSpan = document.getElementById('barcodeMessage');
+
+        messageSpan.textContent = message;
+
+        // Set color based on type
+        statusDiv.className = 'flex items-center p-3 rounded-lg text-sm';
+        if (type === 'success') {
+            statusDiv.classList.add('bg-green-50', 'text-green-800', 'border', 'border-green-200');
+        } else if (type === 'error') {
+            statusDiv.classList.add('bg-red-50', 'text-red-800', 'border', 'border-red-200');
+        } else if (type === 'warning') {
+            statusDiv.classList.add('bg-yellow-50', 'text-yellow-800', 'border', 'border-yellow-200');
+        } else {
+            statusDiv.classList.add('bg-blue-50', 'text-blue-800', 'border', 'border-blue-200');
+        }
+
+        statusDiv.classList.remove('hidden');
+
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            statusDiv.classList.add('hidden');
+        }, 5000);
+    }
+
+    // Scan barcode
+    function scanBarcode() {
+        startBarcodeScan();
+    }
+
+    // Handle scanned barcode
+    function handleScannedBarcode(barcode) {
+        document.getElementById('productBarcode').value = barcode;
+        validateBarcode();
+        closeBarcodeScanner();
+    }
+
+    // Barcode Scanner Functions
+    function startBarcodeScan() {
+        document.getElementById('barcodeScannerModal').classList.remove('hidden');
+    }
+
+    function closeBarcodeScanner() {
+        document.getElementById('barcodeScannerModal').classList.add('hidden');
+        stopCamera();
+    }
+
+    function useManualBarcode() {
+        const barcode = document.getElementById('manualBarcodeInput').value.trim();
+        if (barcode) {
+            document.getElementById('productBarcode').value = barcode;
+            closeBarcodeScanner();
+            showAddProductForm();
+        }
+    }
+
+    function startCamera() {
+        const video = document.getElementById('cameraPreview');
+        const container = document.getElementById('cameraPreviewContainer');
+        const startBtn = document.getElementById('startCameraBtn');
+        const stopBtn = document.getElementById('stopCameraBtn');
+
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            }).then(stream => {
+                cameraStream = stream;
+                video.srcObject = stream;
+                container.classList.remove('hidden');
+                startBtn.classList.add('hidden');
+                stopBtn.classList.remove('hidden');
+
+            }).catch(err => {
+                console.error('Camera error:', err);
+                showToast('Camera access denied or not available', 'error');
+            });
+        } else {
+            showToast('Camera not supported in this browser', 'error');
+        }
+    }
+
+    function stopCamera() {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream = null;
+        }
+
+        const video = document.getElementById('cameraPreview');
+        video.srcObject = null;
+
+        document.getElementById('cameraPreviewContainer').classList.add('hidden');
+        document.getElementById('startCameraBtn').classList.remove('hidden');
+        document.getElementById('stopCameraBtn').classList.add('hidden');
+    }
+
+    // Delete Product Functions
+    function showDeleteModal(productId, productName) {
+        productToDelete = productId;
+        document.getElementById('deleteMessage').textContent =
+            `Are you sure you want to delete "${productName}"? This action cannot be undone.`;
+        document.getElementById('deleteModal').classList.remove('hidden');
+    }
+
+    function closeDeleteModal() {
+        document.getElementById('deleteModal').classList.add('hidden');
+        productToDelete = null;
+    }
+
+    async function deleteProduct() {
+        if (!productToDelete) return;
+
+        try {
+            const response = await fetch(`/products/delete/${productToDelete}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCSRFToken()
+                }
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast('Product deleted successfully!', 'success');
+                location.reload();
+            } else {
+                showToast('Error: ' + result.message, 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting product:', error);
+            showToast('Network error: ' + error.message, 'error');
+        } finally {
+            closeDeleteModal();
+        }
+    }
+
+    // Utility Functions
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('Barcode copied to clipboard!', 'success');
+        }).catch(() => {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showToast('Barcode copied to clipboard!', 'success');
+        });
+    }
+
+    async function addBarcodeToProduct(productId, productName) {
+        const barcode = prompt(`Enter barcode for "${productName}":`);
+        if (barcode) {
+            try {
+                const response = await fetch(`/api/products/${productId}/barcode`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': getCSRFToken()
+                    },
+                    body: JSON.stringify({ barcode: barcode })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showToast(`Barcode added to ${productName}`, 'success');
+                    location.reload();
+                } else {
+                    showToast(result.message || 'Failed to add barcode', 'error');
+                }
+            } catch (error) {
+                console.error('Error adding barcode:', error);
+                showToast('Network error: ' + error.message, 'error');
+            }
+        }
+    }
+
+    // Search and Filter
+    function setupSearchFilters() {
+        const searchInput = document.getElementById('product-search');
+        const barcodeSearch = document.getElementById('barcode-search');
+        const categoryFilter = document.getElementById('category-filter');
+
+        const filterProducts = () => {
+            const searchTerm = searchInput.value.toLowerCase();
+            const barcodeTerm = barcodeSearch.value.toLowerCase();
+            const categoryTerm = categoryFilter.value.toLowerCase();
+
+            document.querySelectorAll('.product-row').forEach(row => {
+                const name = row.dataset.name;
+                const sku = row.dataset.sku || '';
+                const barcode = row.dataset.barcode || '';
+                const category = row.dataset.category || '';
+
+                const matchesSearch = !searchTerm ||
+                    name.includes(searchTerm) ||
+                    sku.includes(searchTerm);
+                const matchesBarcode = !barcodeTerm || barcode.includes(barcodeTerm);
+                const matchesCategory = !categoryTerm || category.includes(categoryTerm);
+
+                row.style.display = (matchesSearch && matchesBarcode && matchesCategory) ? '' : 'none';
+            });
+        };
+
+        searchInput.addEventListener('input', filterProducts);
+        barcodeSearch.addEventListener('input', filterProducts);
+        categoryFilter.addEventListener('change', filterProducts);
+    }
+
+    // Search product by barcode
+    async function searchProductByBarcode(barcode) {
+        try {
+            const response = await fetch(`/api/products/barcode/${encodeURIComponent(barcode)}`);
+            const product = await response.json();
+
+            if (product && product.id) {
+                // Redirect to edit page for the product
+                window.location.href = `/products/edit/${product.id}`;
+            } else {
+                // Product not found, suggest adding it
+                if (confirm(`Product with barcode ${barcode} not found. Would you like to add it?`)) {
+                    document.getElementById('productBarcode').value = barcode;
+                    showAddProductForm();
+                }
+            }
+        } catch (error) {
+            console.error('Error searching product:', error);
+            showToast('Error searching product', 'error');
+        }
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        setupSearchFilters();
+
+        // Handle form submission
+        const addProductForm = document.getElementById('addProductForm');
+        if (addProductForm) {
+            addProductForm.addEventListener('submit', function(e) {
+                const submitBtn = this.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+                    submitBtn.disabled = true;
+                    submitBtn.classList.add('disabled');
+                }
+            });
+        }
+
+        // Auto-generate SKU from product name
+        const productNameInput = document.getElementById('productName');
+        const productSkuInput = document.getElementById('productSKU');
+
+        if (productNameInput && productSkuInput) {
+            productNameInput.addEventListener('blur', function() {
+                if (!productSkuInput.value && this.value) {
+                    // Generate SKU from product name
+                    const sku = this.value
+                        .toUpperCase()
+                        .replace(/[^A-Z0-9]/g, '')
+                        .substring(0, 8);
+
+                    if (sku.length >= 3) {
+                        productSkuInput.value = sku;
+                    } else {
+                        // Add timestamp if name is too short
+                        const timestamp = Date.now().toString().slice(-4);
+                        productSkuInput.value = 'PROD' + timestamp;
+                    }
+                }
+            });
+        }
+
+        // Close modals on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                if (isFormVisible) {
+                    hideAddProductForm();
+                }
+
+                const deleteModal = document.getElementById('deleteModal');
+                if (!deleteModal.classList.contains('hidden')) {
+                    closeDeleteModal();
+                }
+
+                const scannerModal = document.getElementById('barcodeScannerModal');
+                if (!scannerModal.classList.contains('hidden')) {
+                    closeBarcodeScanner();
+                }
             }
         });
 
-        const result = await response.json();
-
-        if (result.success) {
-            alert('Product deleted successfully!');
-            location.reload(); // Refresh the page
-        } else {
-            alert('Error: ' + result.message);
+        // Close delete modal on outside click
+        const deleteModal = document.getElementById('deleteModal');
+        if (deleteModal) {
+            deleteModal.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeDeleteModal();
+                }
+            });
         }
-    } catch (error) {
-        console.error('Error deleting product:', error);
-        alert('Network error: ' + error.message);
-    } finally {
-        closeDeleteModal();
-    }
-}
 
-// Close modals when clicking outside
-document.getElementById('addProductModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeAddProductModal();
-    }
-});
+        // Close scanner modal on outside click
+        const scannerModal = document.getElementById('barcodeScannerModal');
+        if (scannerModal) {
+            scannerModal.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeBarcodeScanner();
+                }
+            });
+        }
 
-document.getElementById('deleteModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeDeleteModal();
-    }
-});
+        // Auto-focus manual barcode input when scanner opens
+        const manualBarcodeInput = document.getElementById('manualBarcodeInput');
+        if (manualBarcodeInput) {
+            // Focus when modal is shown
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                        const modal = document.getElementById('barcodeScannerModal');
+                        if (!modal.classList.contains('hidden')) {
+                            setTimeout(() => manualBarcodeInput.focus(), 100);
+                        }
+                    }
+                });
+            });
 
-// Close modals on escape key
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        closeAddProductModal();
-        closeDeleteModal();
-    }
-});
+            observer.observe(document.getElementById('barcodeScannerModal'), {
+                attributes: true
+            });
+        }
 
-// Prevent form submission from closing modal (let server handle redirect)
-document.querySelector('#addProductModal form').addEventListener('submit', function(e) {
-    // Let form submit normally - server will redirect
-});
+        // Barcode scanner input (keyboard wedge mode)
+        const barcodeInput = document.getElementById('barcode-search');
+        if (barcodeInput) {
+            let barcodeBuffer = '';
+            let lastKeyTime = Date.now();
+
+            barcodeInput.addEventListener('keypress', function(e) {
+                const currentTime = Date.now();
+
+                // If last key was pressed more than 100ms ago, reset buffer
+                if (currentTime - lastKeyTime > 100) {
+                    barcodeBuffer = '';
+                }
+
+                lastKeyTime = currentTime;
+
+                // Add character to buffer
+                barcodeBuffer += e.key;
+
+                // If Enter is pressed, process the barcode
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+
+                    // Remove the Enter key from buffer
+                    barcodeBuffer = barcodeBuffer.replace(/\n/g, '');
+
+                    if (barcodeBuffer.length > 0) {
+                        // Search for product with this barcode
+                        searchProductByBarcode(barcodeBuffer);
+                        barcodeBuffer = '';
+                    }
+                }
+            });
+        }
+
+        // Form submission with barcode validation
+        const addProductFormForValidation = document.getElementById('addProductForm');
+        if (addProductFormForValidation) {
+            addProductFormForValidation.addEventListener('submit', function(e) {
+                // Get barcode value
+                const barcode = document.getElementById('productBarcode').value.trim();
+
+                // If barcode is provided, validate it
+                if (barcode) {
+                    // Basic validation for numeric barcode
+                    const cleanBarcode = barcode.replace(/\D/g, '');
+                    if (cleanBarcode.length < 1) {
+                        // Allow empty barcodes
+                        return;
+                    }
+
+                    if (cleanBarcode.length > 20) {
+                        e.preventDefault();
+                        showBarcodeStatus('error', 'Barcode too long (max 20 characters)');
+                        return;
+                    }
+                }
+            });
+        }
+
+        // Auto-focus barcode input when form opens
+        const productBarcodeInput = document.getElementById('productBarcode');
+        if (productBarcodeInput) {
+            // Listen for form showing
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                        const formContainer = document.getElementById('addProductFormContainer');
+                        if (!formContainer.classList.contains('hidden')) {
+                            setTimeout(() => productBarcodeInput.focus(), 100);
+                        }
+                    }
+                });
+            });
+
+            const formContainer = document.getElementById('addProductFormContainer');
+            if (formContainer) {
+                observer.observe(formContainer, { attributes: true });
+            }
+        }
+
+        // Add Enter key support for barcode validation
+        if (productBarcodeInput) {
+            productBarcodeInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    validateBarcode();
+                }
+            });
+        }
+    });
 </script>
 {% endblock %}

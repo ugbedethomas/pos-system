@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+
+{% block title %}Products - POS System{% endblock %}
+{% block page_title %}Products Management{% endblock %}
+{% block page_subtitle %}Add, edit, and manage your products{% endblock %}
+
+{% block content %}
+<!-- Success/Error Messages -->
+{% if request.args.get('success') %}
+<div class="mb-4 p-4 bg-green-100 text-green-700 rounded-lg">
+    <i class="fas fa-check-circle mr-2"></i> {{ request.args.get('success')|replace('+', ' ') }}
+</div>
+{% endif %}
+
+{% if request.args.get('error') %}
+<div class="mb-4 p-4 bg-red-100 text-red-700 rounded-lg">
+    <i class="fas fa-exclamation-circle mr-2"></i> {{ request.args.get('error')|replace('+', ' ') }}
+</div>
+{% endif %}
+
+<div class="mb-6">
+    <div class="flex justify-between items-center">
+        <h3 class="text-lg font-semibold text-gray-800">All Products</h3>
+        <button onclick="showAddProductModal()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
+            <i class="fas fa-plus mr-2"></i> Add Product
+        </button>
+    </div>
+</div>
+
+<div class="bg-white rounded-xl shadow overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Barcode</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+            {% for product in products %}
+            <tr class="hover:bg-gray-50">
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-box text-gray-400"></i>
+                        </div>
+                        <div class="ml-4">
+                            <div class="text-sm font-medium text-gray-900">{{ product.name }}</div>
+                            <div class="text-sm text-gray-500">{{ product.description|truncate(30) if product.description else 'No description' }}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded">{{ product.sku }}</span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    {% if product.barcode %}
+                    <div class="flex items-center">
+                        <i class="fas fa-barcode text-gray-400 mr-2 text-sm"></i>
+                        <span class="text-xs font-mono bg-gray-50 px-2 py-1 rounded border">{{ product.barcode }}</span>
+                    </div>
+                    {% else %}
+                    <span class="text-xs text-gray-400 italic">No barcode</span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {{ product.category or 'Uncategorized' }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    {{ format_naira(product.price) }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                        <span class="text-sm font-medium">{{ product.stock_quantity }}</span>
+                        {% if product.stock_quantity <= (product.reorder_level or 10) %}
+                        <span class="ml-2 px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded">Low</span>
+                        {% endif %}
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 py-1 text-xs rounded-full {% if product.stock_quantity > 0 %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                        {{ 'In Stock' if product.stock_quantity > 0 else 'Out of Stock' }}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div class="flex space-x-2">
+                        <a href="/products/edit/{{ product.id }}"
+                           class="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm">
+                            <i class="fas fa-edit mr-1"></i>Edit
+                        </a>
+                        <button onclick="showDeleteModal({{ product.id }}, '{{ product.name }}')"
+                                class="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm">
+                            <i class="fas fa-trash mr-1"></i>Delete
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if products|length == 0 %}
+    <div class="text-center py-12">
+        <i class="fas fa-box-open text-gray-300 text-5xl mb-4"></i>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">No products yet</h3>
+        <p class="text-gray-500 mb-4">Add your first product to get started</p>
+        <button onclick="showAddProductModal()" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700">
+            <i class="fas fa-plus mr-2"></i> Add First Product
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Add Product Modal -->
+<div id="addProductModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4">
+        <h3 class="text-xl font-bold text-gray-800 mb-4">Add New Product</h3>
+
+        <form method="POST" action="/products/create">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
+                    <input type="text" name="name" required
+                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                           placeholder="e.g., Coca-Cola 50cl">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">SKU *</label>
+                    <input type="text" name="sku" required
+                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                           placeholder="e.g., COKE-50CL-001">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        <i class="fas fa-barcode mr-1"></i>Barcode (Optional)
+                    </label>
+                    <input type="text" name="barcode"
+                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                           placeholder="e.g., 1234567890123">
+                    <p class="text-xs text-gray-500 mt-1">
+                        Enter 12-13 digit barcode. Leave empty to auto-generate.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Price (₦) *</label>
+                        <input type="number" step="0.01" name="price" required
+                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               placeholder="0.00">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Cost Price (₦)</label>
+                        <input type="number" step="0.01" name="cost_price" value="0"
+                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               placeholder="Cost price">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Initial Stock</label>
+                        <input type="number" name="stock_quantity" value="0" min="0"
+                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Reorder Level</label>
+                        <input type="number" name="reorder_level" value="10" min="0"
+                               class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               placeholder="Alert when stock is low">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                    <select name="category" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="">Select Category</option>
+                        <option value="Beverages">Beverages</option>
+                        <option value="Food">Food</option>
+                        <option value="Snacks">Snacks</option>
+                        <option value="Household">Household</option>
+                        <option value="Personal Care">Personal Care</option>
+                        <option value="Electronics">Electronics</option>
+                        <option value="Clothing">Clothing</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea name="description" rows="3"
+                              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              placeholder="Product description (optional)"></textarea>
+                </div>
+            </div>
+
+            <div class="flex space-x-3 mt-6">
+                <button type="submit" class="flex-1 bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700">
+                    <i class="fas fa-save mr-2"></i>Save Product
+                </button>
+                <button type="button" onclick="closeAddProductModal()" class="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg hover:bg-gray-300">
+                    <i class="fas fa-times mr-2"></i>Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg max-w-md w-full">
+        <div class="p-6">
+            <div class="text-center mb-6">
+                <i class="fas fa-exclamation-triangle text-3xl text-red-600 mb-4"></i>
+                <h3 class="text-xl font-bold text-gray-800">Delete Product</h3>
+                <p class="text-gray-600 mt-2" id="deleteMessage">Are you sure you want to delete this product?</p>
+            </div>
+
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeDeleteModal()"
+                        class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">
+                    Cancel
+                </button>
+                <button onclick="deleteProduct()"
+                        class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                    Delete Product
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let productToDelete = null;
+
+function showAddProductModal() {
+    document.getElementById('addProductModal').classList.remove('hidden');
+    // Focus on first input field
+    document.querySelector('#addProductModal input[name="name"]').focus();
+}
+
+function closeAddProductModal() {
+    document.getElementById('addProductModal').classList.add('hidden');
+    // Clear form on close
+    document.querySelector('#addProductModal form').reset();
+}
+
+function showDeleteModal(productId, productName) {
+    productToDelete = productId;
+    document.getElementById('deleteMessage').textContent =
+        `Are you sure you want to delete "${productName}"? This action cannot be undone.`;
+    document.getElementById('deleteModal').classList.remove('hidden');
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.add('hidden');
+    productToDelete = null;
+}
+
+async function deleteProduct() {
+    if (!productToDelete) return;
+
+    try {
+        const response = await fetch(`/products/delete/${productToDelete}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert('Product deleted successfully!');
+            location.reload(); // Refresh the page
+        } else {
+            alert('Error: ' + result.message);
+        }
+    } catch (error) {
+        console.error('Error deleting product:', error);
+        alert('Network error: ' + error.message);
+    } finally {
+        closeDeleteModal();
+    }
+}
+
+// Barcode Scanner Integration (optional enhancement)
+function showBarcodeScanner() {
+    alert('Barcode scanner would open here. To implement: Add camera access and barcode scanning library.');
+    // Implementation:
+    // 1. Use HTML5 QR/Barcode scanner library
+    // 2. Open camera
+    // 3. On scan, fill barcode field
+}
+
+// Auto-focus barcode input when clicking the barcode field
+document.addEventListener('DOMContentLoaded', function() {
+    const barcodeInput = document.querySelector('input[name="barcode"]');
+    if (barcodeInput) {
+        barcodeInput.addEventListener('focus', function() {
+            this.select(); // Select all text for easy replacement
+        });
+
+        // Add scan button next to barcode field
+        const barcodeContainer = barcodeInput.parentElement;
+        const scanButton = document.createElement('button');
+        scanButton.type = 'button';
+        scanButton.className = 'absolute right-2 top-8 bg-blue-500 text-white p-1 rounded';
+        scanButton.innerHTML = '<i class="fas fa-camera"></i>';
+        scanButton.title = 'Scan barcode';
+        scanButton.onclick = showBarcodeScanner;
+        barcodeContainer.style.position = 'relative';
+        barcodeContainer.appendChild(scanButton);
+    }
+});
+
+// Close modals when clicking outside
+document.getElementById('addProductModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeAddProductModal();
+    }
+});
+
+document.getElementById('deleteModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeDeleteModal();
+    }
+});
+
+// Close modals on escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeAddProductModal();
+        closeDeleteModal();
+    }
+});
+
+// Prevent form submission from closing modal (let server handle redirect)
+document.querySelector('#addProductModal form').addEventListener('submit', function(e) {
+    // Let form submit normally - server will redirect
+    // Optionally add loading indicator
+    const submitBtn = this.querySelector('button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
+        submitBtn.disabled = true;
+    }
+});
+</script>
+
+<style>
+/* Barcode styling */
+.barcode-display {
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+    background: linear-gradient(90deg, #000 1px, transparent 1px);
+    background-size: 2px 100%;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid #e5e7eb;
+}
+
+/* Responsive table */
+@media (max-width: 1024px) {
+    .mobile-hidden {
+        display: none;
+    }
+}
+</style>
+{% endblock %}
