@@ -295,110 +295,39 @@ def require_login():
 # Login page
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # Try to auto-initialize database if needed
-    try:
-        db = SessionLocal()
-        # Test if users table exists by trying a simple query
-        db.execute("SELECT 1 FROM users LIMIT 1")
-
-        # Check if schema is complete
-        from sqlalchemy import inspect
-        inspector = inspect(db.get_bind())
-
-        # Check customers table has address column
-        if 'customers' in inspector.get_table_names():
-            customer_columns = [col['name'] for col in inspector.get_columns('customers')]
-            if 'address' not in customer_columns:
-                print("🔄 Adding missing columns to customers table...")
-                db.execute("ALTER TABLE customers ADD COLUMN address TEXT")
-
-        # Check products table has required columns
-        if 'products' in inspector.get_table_names():
-            product_columns = [col['name'] for col in inspector.get_columns('products')]
-            missing_columns = []
-
-            if 'cost_price' not in product_columns:
-                missing_columns.append("cost_price REAL DEFAULT 0")
-            if 'barcode' not in product_columns:
-                missing_columns.append("barcode TEXT")
-            if 'is_active' not in product_columns:
-                missing_columns.append("is_active BOOLEAN DEFAULT 1")
-
-            for col_def in missing_columns:
-                col_name = col_def.split()[0]
-                print(f"🔄 Adding missing column '{col_name}' to products table...")
-                db.execute(f"ALTER TABLE products ADD COLUMN {col_def}")
-
-        db.commit()
-        db.close()
-
-    except Exception as e:
-        # Database not initialized - auto-initialize it
-        print(f"⚠️ Database not initialized. Auto-initializing... Error: {e}")
-        # ... rest of your existing initialization code ...
-        try:
-            from app.database import Base, engine, SessionLocal
-            from app.auth import get_password_hash
-            import traceback
-
-            print("🔄 Creating database tables...")
-            Base.metadata.create_all(bind=engine)
-
-            # Create default users
-            db = SessionLocal()
-            from app.models import User
-
-            users_to_create = [
-                ("admin", "admin123", "admin", "System Administrator"),
-                ("cashier", "cashier123", "cashier", "Cashier User"),
-                ("inventory", "inventory123", "inventory", "Inventory Manager")
-            ]
-
-            for username, password, role, full_name in users_to_create:
-                existing = db.query(User).filter(User.username == username).first()
-                if not existing:
-                    user = User(
-                        username=username,
-                        email=f"{username}@pos.com",
-                        hashed_password=get_password_hash(password),
-                        role=role,
-                        full_name=full_name,
-                        is_active=True
-                    )
-                    db.add(user)
-
-            db.commit()
-            db.close()
-            print("✅ Database auto-initialized successfully!")
-
-        except Exception as init_error:
-            print(f"❌ Auto-initialization failed: {init_error}")
-            print(traceback.format_exc())
-            # Continue to login page - user will see error if they try to login
-
-    # Now handle the login request normally
+    # SIMPLIFIED: Just handle login, no complex auto-initialization
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
 
+        if not username or not password:
+            return render_template('login.html', error='Username and password are required')
+
         db = SessionLocal()
-        user = authenticate_user(db, username, password)
+        try:
+            user = authenticate_user(db, username, password)
 
-        if user:
-            session['user_id'] = user.id
-            session['username'] = user.username
-            session['role'] = user.role
-            session['full_name'] = user.full_name
+            if user:
+                session['user_id'] = user.id
+                session['username'] = user.username
+                session['role'] = user.role
+                session['full_name'] = user.full_name
 
-            user.last_login = datetime.now()
-            db.commit()
+                user.last_login = datetime.now()
+                db.commit()
+                db.close()
+
+                return redirect('/')
+            else:
+                db.close()
+                return render_template('login.html', error='Invalid username or password')
+        except Exception as e:
             db.close()
+            # Log the error but show generic message to user
+            print(f"Login error: {e}")
+            return render_template('login.html', error='Login failed. Please try again.')
 
-            return redirect('/')
-        else:
-            db.close()
-            return render_template('login.html', error='Invalid username or password')
-
+    # GET request - show login page
     return render_template('login.html')
 
 
