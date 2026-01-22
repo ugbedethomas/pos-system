@@ -34,7 +34,8 @@
 
     <!-- Edit Product Form -->
     <div class="bg-white rounded-xl shadow-lg p-6">
-        <form method="POST" action="/products/update/{{ product.id }}" id="editProductForm">
+        <!-- To this: -->
+        <form method="POST" action="/products/edit/{{ product.id }}" id="editProductForm">
             <div class="space-y-8">
                 <!-- Basic Information -->
                 <div class="border-b pb-6">
