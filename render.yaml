@@ -2,23 +2,9 @@
   - type: web
     name: pos-system
     env: python
-    plan: free
-    region: singapore
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: gunicorn web_server:app
+    pythonVersion: "3.11.4"
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: pos-database
-          property: connectionString
-      - key: SECRET_KEY
-        generateValue: true
-      - key: PYTHON_VERSION
-        value: 3.11.8
-
-databases:
-  - name: pos-database
-    plan: free
-    region: singapore
-    databaseName: pos_system
-    user: pos_user
+        sync: false
