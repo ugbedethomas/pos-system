@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Backup Manager - POS System{% endblock %}
+{% block page_title %}Backup Manager{% endblock %}
+{% block page_subtitle %}Manage database backups{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Backup Actions -->
+    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <div class="flex flex-wrap gap-4 mb-6">
+            <form method="POST" class="inline">
+                <input type="hidden" name="action" value="create_backup">
+                <button type="submit"
+                        class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center gap-2">
+                    <i class="fas fa-download"></i>
+                    Create Backup Now
+                </button>
+            </form>
+
+            <a href="/api/health/check" target="_blank"
+               class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2">
+                <i class="fas fa-heartbeat"></i>
+                System Health Check
+            </a>
+
+            <a href="https://dashboard.render.com" target="_blank"
+               class="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium flex items-center gap-2">
+                <i class="fas fa-external-link-alt"></i>
+                Render Dashboard
+            </a>
+        </div>
+
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div class="flex items-start">
+                <i class="fas fa-exclamation-triangle text-yellow-600 mt-1 mr-3"></i>
+                <div>
+                    <h4 class="font-semibold text-yellow-800">Important Notice</h4>
+                    <p class="text-yellow-700 text-sm mt-1">
+                        Your data is stored in Render's PostgreSQL database which persists between deployments.
+                        Backups are created as JSON files for emergency recovery.
+                    </p>
+                    <p class="text-yellow-700 text-sm mt-2">
+                        <strong>Before deploying new code:</strong> Always run the deployment script to create a backup.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Existing Backups -->
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-800">Existing Backups</h3>
+            <p class="text-gray-600 text-sm">Backups are stored as JSON files</p>
+        </div>
+
+        {% if backups %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Backup File
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Size
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Created
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for backup in backups %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <i class="fas fa-file-archive text-gray-400 mr-3"></i>
+                                <div>
+                                    <div class="text-sm font-medium text-gray-900">{{ backup.name }}</div>
+                                    <div class="text-xs text-gray-500">
+                                        {% if 'postgres' in backup.name %}
+                                        <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">PostgreSQL</span>
+                                        {% else %}
+                                        <span class="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs">SQLite</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="text-sm text-gray-900">{{ backup.size }}</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="text-sm text-gray-900">{{ backup.modified }}</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex space-x-2">
+                                <a href="/backups/{{ backup.name }}" download
+                                   class="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm flex items-center">
+                                    <i class="fas fa-download mr-1"></i>
+                                    Download
+                                </a>
+
+                                {% if not 'postgres' in backup.name %}
+                                <form method="POST" class="inline">
+                                    <input type="hidden" name="action" value="restore_backup">
+                                    <input type="hidden" name="backup_file" value="{{ backup.name }}">
+                                    <button type="submit"
+                                            onclick="return confirm('WARNING: This will overwrite current data. Continue?')"
+                                            class="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 text-sm flex items-center">
+                                        <i class="fas fa-undo mr-1"></i>
+                                        Restore
+                                    </button>
+                                </form>
+                                {% endif %}
+
+                                <button onclick="deleteBackup('{{ backup.name }}')"
+                                        class="px-3 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm flex items-center">
+                                    <i class="fas fa-trash mr-1"></i>
+                                    Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-12">
+            <div class="mb-4">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                    <i class="fas fa-database text-gray-400 text-2xl"></i>
+                </div>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">No backups found</h3>
+            <p class="text-gray-600 mb-6 max-w-md mx-auto">
+                Create your first backup to protect your data. Backups are stored locally and can be downloaded.
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function deleteBackup(filename) {
+    if (confirm(`Delete backup "${filename}"?`)) {
+        fetch(`/api/backup/delete/${filename}`, {
+            method: 'DELETE'
+        }).then(response => response.json())
+          .then(data => {
+              if (data.success) {
+                  location.reload();
+              } else {
+                  alert('Error: ' + data.message);
+              }
+          });
+    }
+}
+</script>
+{% endblock %}

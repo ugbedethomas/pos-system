@@ -2530,6 +2530,93 @@ def complete_sale():
         return jsonify({'success': False, 'message': str(e)}), 500
     finally:
         db.close()
+
+        @app.route('/admin/backup', methods=['GET', 'POST'])
+        def backup_manager():
+            """Backup management interface"""
+            if not check_permission('admin'):
+                return "Access Denied", 403
+
+            if request.method == 'POST':
+                action = request.form.get('action')
+
+                if action == 'create_backup':
+                    try:
+                        # Create backup
+                        if os.environ.get('DATABASE_URL'):
+                            # PostgreSQL backup
+                            from scripts.backup_postgres import backup_postgresql
+                            backup_file = backup_postgresql()
+                        else:
+                            # SQLite backup
+                            import backup_manager
+                            backup_file = backup_manager.backup_database()
+
+                        if backup_file:
+                            flash(f'Backup created: {os.path.basename(backup_file)}', 'success')
+                        else:
+                            flash('Backup failed', 'error')
+
+                    except Exception as e:
+                        flash(f'Backup error: {str(e)}', 'error')
+
+                elif action == 'restore_backup':
+                    backup_file = request.form.get('backup_file')
+                    if backup_file:
+                        try:
+                            if os.environ.get('DATABASE_URL'):
+                                flash('Manual restore not available for PostgreSQL. Use Render dashboard.', 'warning')
+                            else:
+                                import backup_manager
+                                if backup_manager.restore_database(f'backups/{backup_file}'):
+                                    flash('Database restored successfully!', 'success')
+                                else:
+                                    flash('Restore failed', 'error')
+                        except Exception as e:
+                            flash(f'Restore error: {str(e)}', 'error')
+
+            # List backups
+            backups = []
+            backup_dir = Path("backups")
+            if backup_dir.exists():
+                for file in backup_dir.glob("*.json"):
+                    backups.append({
+                        'name': file.name,
+                        'size': f"{file.stat().st_size / 1024:.1f} KB",
+                        'modified': datetime.fromtimestamp(file.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                    })
+
+            backups.sort(key=lambda x: x['modified'], reverse=True)
+
+            return render_template('backup_manager.html', backups=backups)
+
+        @app.route('/api/health/check')
+        def health_check():
+            """Comprehensive health check"""
+            try:
+                # Test database
+                db = SessionLocal()
+                db.execute("SELECT 1")
+                db.close()
+
+                # Check backup directory
+                backup_dir = Path("backups")
+                has_backups = backup_dir.exists() and any(backup_dir.glob("*.json"))
+
+                return jsonify({
+                    'status': 'healthy',
+                    'database': 'connected',
+                    'has_backups': has_backups,
+                    'timestamp': datetime.now().isoformat(),
+                    'environment': 'production' if os.environ.get('DATABASE_URL') else 'development'
+                })
+            except Exception as e:
+                return jsonify({
+                    'status': 'unhealthy',
+                    'error': str(e),
+                    'timestamp': datetime.now().isoformat()
+                }), 500
+
 if __name__ == '__main__':
     # Get port from environment variable (Render sets PORT)
     port = int(os.environ.get('PORT', 5000))

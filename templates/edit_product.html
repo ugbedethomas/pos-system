@@ -34,7 +34,6 @@
 
     <!-- Edit Product Form -->
     <div class="bg-white rounded-xl shadow-lg p-6">
-        <!-- To this: -->
         <form method="POST" action="/products/edit/{{ product.id }}" id="editProductForm">
             <div class="space-y-8">
                 <!-- Basic Information -->
@@ -134,13 +133,46 @@
                         <select name="category"
                                 class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                             <option value="">Select Category</option>
+
+                            <!-- 🍼 Baby & Toys Categories -->
+                            <option value="Toys" {% if product.category == 'Toys' %}selected{% endif %}>Toys</option>
+                            <option value="Baby Care" {% if product.category == 'Baby Care' %}selected{% endif %}>Baby Care</option>
+                            <option value="Baby Food" {% if product.category == 'Baby Food' %}selected{% endif %}>Baby Food</option>
+                            <option value="Baby Clothing" {% if product.category == 'Baby Clothing' %}selected{% endif %}>Baby Clothing</option>
+                            <option value="Nursery" {% if product.category == 'Nursery' %}selected{% endif %}>Nursery</option>
+                            <option value="Diapers" {% if product.category == 'Diapers' %}selected{% endif %}>Diapers</option>
+                            <option value="Feeding" {% if product.category == 'Feeding' %}selected{% endif %}>Feeding</option>
+                            <option value="Safety" {% if product.category == 'Safety' %}selected{% endif %}>Safety</option>
+                            <option value="Strollers" {% if product.category == 'Strollers' %}selected{% endif %}>Strollers</option>
+                            <option value="Car Seats" {% if product.category == 'Car Seats' %}selected{% endif %}>Car Seats</option>
+                            <option value="Educational Toys" {% if product.category == 'Educational Toys' %}selected{% endif %}>Educational Toys</option>
+                            <option value="Outdoor Play" {% if product.category == 'Outdoor Play' %}selected{% endif %}>Outdoor Play</option>
+
+                            <!-- Food & Beverages -->
                             <option value="Beverages" {% if product.category == 'Beverages' %}selected{% endif %}>Beverages</option>
                             <option value="Food" {% if product.category == 'Food' %}selected{% endif %}>Food</option>
                             <option value="Snacks" {% if product.category == 'Snacks' %}selected{% endif %}>Snacks</option>
+
+                            <!-- Household -->
                             <option value="Household" {% if product.category == 'Household' %}selected{% endif %}>Household</option>
-                            <option value="Personal Care" {% if product.category == 'Personal Care' %}selected{% endif %}>Personal Care</option>
-                            <option value="Electronics" {% if product.category == 'Electronics' %}selected{% endif %}>Electronics</option>
+                            <option value="Cleaning" {% if product.category == 'Cleaning' %}selected{% endif %}>Cleaning</option>
+                            <option value="Kitchen" {% if product.category == 'Kitchen' %}selected{% endif %}>Kitchen</option>
+                            <option value="Bathroom" {% if product.category == 'Bathroom' %}selected{% endif %}>Bathroom</option>
+
+                            <!-- Clothing -->
                             <option value="Clothing" {% if product.category == 'Clothing' %}selected{% endif %}>Clothing</option>
+                            <option value="Accessories" {% if product.category == 'Accessories' %}selected{% endif %}>Accessories</option>
+
+                            <!-- Personal Care -->
+                            <option value="Personal Care" {% if product.category == 'Personal Care' %}selected{% endif %}>Personal Care</option>
+                            <option value="Health & Wellness" {% if product.category == 'Health & Wellness' %}selected{% endif %}>Health & Wellness</option>
+                            <option value="Beauty" {% if product.category == 'Beauty' %}selected{% endif %}>Beauty</option>
+
+                            <!-- Other -->
+                            <option value="Electronics" {% if product.category == 'Electronics' %}selected{% endif %}>Electronics</option>
+                            <option value="School Supplies" {% if product.category == 'School Supplies' %}selected{% endif %}>School Supplies</option>
+                            <option value="Stationery" {% if product.category == 'Stationery' %}selected{% endif %}>Stationery</option>
+                            <option value="Books" {% if product.category == 'Books' %}selected{% endif %}>Books</option>
                             <option value="Other" {% if product.category == 'Other' %}selected{% endif %}>Other</option>
                         </select>
                     </div>
