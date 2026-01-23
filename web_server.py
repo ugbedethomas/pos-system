@@ -1899,18 +1899,29 @@ def get_sale_details(sale_id):
         db.close()
 
 
-# Database initialization route - FIXED SINGLE VERSION
+# Database initialization route - SMART VERSION (Preserves existing users/passwords)
 @app.route('/init-now')
 def init_now():
-    """Initialize database silently and redirect to login"""
+    """Initialize database safely - creates missing tables/users only"""
     try:
         from app.database import Base, engine, SessionLocal
         from app.auth import get_password_hash
+        from sqlalchemy import inspect
 
-        # 1. Create tables
-        Base.metadata.create_all(bind=engine)
+        # 1. Check if tables already exist
+        inspector = inspect(engine)
+        existing_tables = inspector.get_table_names()
+        was_first_time = False
 
-        # 2. Create users (only if they don't exist)
+        if not existing_tables:
+            # First time setup - create all tables
+            Base.metadata.create_all(bind=engine)
+            was_first_time = True
+            print(f"✅ [{datetime.now()}] Created database tables (first time)")
+        else:
+            print(f"✅ [{datetime.now()}] Database already exists - preserving all data")
+
+        # 2. Create default users ONLY if they don't exist
         db = SessionLocal()
 
         users_to_create = [
@@ -1919,6 +1930,7 @@ def init_now():
             ("inventory", "inventory123", "inventory", "Inventory Manager")
         ]
 
+        created_users = []
         for username, password, role, full_name in users_to_create:
             existing = db.query(models.User).filter(models.User.username == username).first()
             if not existing:
@@ -1931,27 +1943,156 @@ def init_now():
                     is_active=True
                 )
                 db.add(user)
+                created_users.append(username)
+                print(f"✅ Created user: {username}")
+            else:
+                print(f"✅ User already exists: {username}")
 
         db.commit()
         db.close()
 
-        # Log to console only (not shown to user)
-        print(f"✅ [{datetime.now()}] Database initialized via /init-now")
+        # 3. Show different message based on whether it was first time
+        if was_first_time:
+            print(f"✅ [{datetime.now()}] Database initialized with default users")
+            return '''
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Database Initialized</title>
+                <meta http-equiv="refresh" content="3;url=/login">
+                <style>
+                    body { font-family: Arial; padding: 40px; text-align: center; }
+                    .success { color: green; font-size: 24px; }
+                    .warning { color: orange; background: #fff8e1; padding: 15px; border-radius: 5px; margin: 20px; }
+                    .info { background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px; }
+                </style>
+            </head>
+            <body>
+                <div class="success">✅ Database Initialized Successfully!</div>
 
-        # IMMEDIATE REDIRECT to login
-        return redirect('/login')
+                <div class="info">
+                    <h3>Default Users Created:</h3>
+                    <p><strong>Admin:</strong> admin / admin123</p>
+                    <p><strong>Cashier:</strong> cashier / cashier123</p>
+                    <p><strong>Inventory:</strong> inventory / inventory123</p>
+                </div>
+
+                <div class="warning">
+                    <h3>⚠️ IMPORTANT:</h3>
+                    <p><strong>Change these passwords immediately after login!</strong></p>
+                    <p>Use the "Change Password" option in your profile.</p>
+                </div>
+
+                <p>Redirecting to login in 3 seconds...</p>
+                <p><a href="/login">Click here if not redirected</a></p>
+            </body>
+            </html>
+            '''
+        else:
+            print(f"✅ [{datetime.now()}] Database checked - existing users preserved")
+            return '''
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Database Already Initialized</title>
+                <meta http-equiv="refresh" content="3;url=/login">
+                <style>
+                    body { font-family: Arial; padding: 40px; text-align: center; }
+                    .info { color: blue; font-size: 24px; }
+                    .success { background: #e8f5e9; padding: 15px; border-radius: 5px; margin: 20px; }
+                </style>
+            </head>
+            <body>
+                <div class="info">✅ Database Already Initialized</div>
+
+                <div class="success">
+                    <h3>All User Data Preserved</h3>
+                    <p>Your existing users, passwords, and all data are safe.</p>
+                    <p><strong>Use your current passwords to login.</strong></p>
+                    <p><em>New users created: ''' + (
+                ', '.join(created_users) if created_users else 'None (all users already exist)') + '''</em></p>
+                </div>
+
+                <p>Redirecting to login in 3 seconds...</p>
+                <p><a href="/login">Click here if not redirected</a></p>
+            </body>
+            </html>
+            '''
 
     except Exception as e:
-        # Only show error if something goes wrong
+        # Error handling
+        print(f"❌ [{datetime.now()}] Database initialization failed: {str(e)}")
         return f'''
-        <h1>Error</h1>
-        <p>Database initialization failed.</p>
-        <p><a href="/login">Try to login anyway</a></p>
-        <details>
-            <summary>Technical Details</summary>
-            <pre>{str(e)}</pre>
-        </details>
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Error</title>
+            <style>
+                body {{ font-family: Arial; padding: 40px; }}
+                .error {{ color: red; font-size: 20px; }}
+                .details {{ background: #ffebee; padding: 15px; border-radius: 5px; margin: 20px 0; }}
+            </style>
+        </head>
+        <body>
+            <div class="error">❌ Database Initialization Failed</div>
+
+            <p>The database could not be initialized. This could be because:</p>
+            <ul>
+                <li>Database connection issue</li>
+                <li>Permission problems</li>
+                <li>Existing database with different structure</li>
+            </ul>
+
+            <div class="details">
+                <strong>Technical Error:</strong>
+                <pre>{str(e)}</pre>
+            </div>
+
+            <p><a href="/login">Try to login anyway</a> • <a href="/" onclick="location.reload()">Retry initialization</a></p>
+        </body>
+        </html>
         '''
+
+    @app.route('/change-password', methods=['POST'])
+    def change_password():
+        """Change password for logged-in user"""
+        try:
+            data = request.json
+            username = data.get('username')
+            current_password = data.get('current_password')
+            new_password = data.get('new_password')
+
+            if not all([username, current_password, new_password]):
+                return jsonify({"error": "Missing fields"}), 400
+
+            from app.database import SessionLocal
+            from app.auth import verify_password, get_password_hash
+
+            db = SessionLocal()
+            user = db.query(models.User).filter(models.User.username == username).first()
+
+            if not user:
+                return jsonify({"error": "User not found"}), 404
+
+            # Verify current password
+            if not verify_password(current_password, user.hashed_password):
+                return jsonify({"error": "Current password is incorrect"}), 401
+
+            # Update to new password
+            user.hashed_password = get_password_hash(new_password)
+            db.commit()
+            db.close()
+
+            return jsonify({
+                "success": True,
+                "message": "Password updated successfully"
+            })
+
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+
+
 
 
 # Additional initialization endpoint for backward compatibility
@@ -2546,6 +2687,134 @@ def complete_sale():
                     'timestamp': datetime.now().isoformat()
                 }), 500
 
+            # Add this function
+            def initialize_database_safely():
+                from app.models import User
+                from sqlalchemy import inspect
+
+                inspector = inspect(db.engine)
+                existing_tables = inspector.get_table_names()
+
+                # Create tables if they don't exist
+                if not existing_tables:
+                    db.create_all()
+                    print("✅ Created database tables")
+
+                    # Create admin user with DEFAULT password
+                    hashed_password = "admin123"  # Or use: generate_password_hash("admin123")
+                    admin = User(username='admin', password=hashed_password)
+                    db.session.add(admin)
+                    db.session.commit()
+                    print("✅ Created default admin user (password: admin123)")
+                    return True
+                else:
+                    print("✅ Using existing database - preserving user data")
+
+                    # Check if admin exists, if not create one
+                    admin = User.query.filter_by(username='admin').first()
+                    if not admin:
+                        hashed_password = "admin123"  # Or use: generate_password_hash("admin123")
+                        admin = User(username='admin', password=hashed_password)
+                        db.session.add(admin)
+                        db.session.commit()
+                        print("✅ Added missing admin user")
+
+                    return False  # Database already existed
+
+
+def check_database_status():
+    """Check database status on startup"""
+    try:
+        from app.database import engine
+        from sqlalchemy import inspect
+
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+
+        if tables:
+            print(f"✅ Database ready with {len(tables)} tables")
+
+            # Check if admin user exists
+            from app.database import SessionLocal
+            db = SessionLocal()
+            admin = db.query(models.User).filter(models.User.username == 'admin').first()
+            db.close()
+
+            if admin:
+                print(f"✅ Admin user exists")
+            else:
+                print(f"⚠️  Admin user not found - visit /init-now")
+
+        else:
+            print(f"⚠️  Database not initialized - visit /init-now for first-time setup")
+
+    except Exception as e:
+        print(f"⚠️  Database check failed: {e}")
+
+
+@app.route('/api/adjust-stock', methods=['POST'])
+def adjust_stock():
+    """Stock adjustment - SIMPLE WORKING VERSION"""
+    try:
+        data = request.json
+        product_id = data.get('product_id')
+        quantity = data.get('quantity')
+
+        if not product_id or quantity is None:
+            return jsonify({"success": False, "error": "Missing product or quantity"}), 400
+
+        from app.database import SessionLocal
+        db = SessionLocal()
+
+        # Get product
+        product = db.query(models.Product).filter(models.Product.id == product_id).first()
+
+        if not product:
+            db.close()
+            return jsonify({"success": False, "error": "Product not found"}), 404
+
+        # Store product name BEFORE any updates
+        product_name = product.name
+        current_stock = product.stock_quantity
+        new_stock = current_stock + quantity
+
+        if new_stock < 0:
+            db.close()
+            return jsonify({"success": False, "error": "Stock cannot go below zero"}), 400
+
+        # Update product
+        product.stock_quantity = new_stock
+
+        # Create movement
+        movement = models.StockMovement(
+            product_id=product_id,
+            quantity=quantity,
+            movement_type=data.get('adjustment_type', 'adjustment'),
+            reference=data.get('reference', 'Stock adjustment'),
+            created_at=datetime.now(),
+            created_by=session.get('username', 'Anonymous')
+        )
+        db.add(movement)
+
+        db.commit()
+        db.close()
+
+        # Log using stored variables
+        print(f"✅ Stock updated: {product_name} ({quantity:+d}) = {new_stock}")
+
+        return jsonify({
+            "success": True,
+            "message": f"Updated {product_name}",
+            "new_stock": new_stock,
+            "product_name": product_name
+        })
+
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+
 if __name__ == '__main__':
     # Get port from environment variable (Render sets PORT)
     port = int(os.environ.get('PORT', 5000))
@@ -2567,6 +2836,10 @@ if __name__ == '__main__':
     print(f"   http://localhost:{port}/init-now (first time only)")
     print(f"   http://localhost:{port}/force-init-db")
     print(f"   http://localhost:{port}/health")
+
+    # Check database status
+    with app.app_context():
+        check_database_status()
 
     app.run(
         host='0.0.0.0',
