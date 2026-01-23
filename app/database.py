@@ -1,36 +1,26 @@
-# app/database.py - CLEAN VERSION
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Get database URL from environment variable
-database_url = os.environ.get('DATABASE_URL')
+# Get database URL from environment
+DATABASE_URL = os.getenv('DATABASE_URL')
 
-if database_url:
-    # Render provides PostgreSQL, convert postgres:// to postgresql://
-    if database_url.startswith('postgres://'):
-        database_url = database_url.replace('postgres://', 'postgresql://', 1)
-
-    print("✅ Using PostgreSQL database")
-    engine = create_engine(database_url)
+# FIX: Always use PostgreSQL on Render, SQLite locally
+if DATABASE_URL:
+    # Render PostgreSQL - fix URL format
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    print(f"✅ Using PostgreSQL database (Render)")
+    engine = create_engine(DATABASE_URL)
 else:
-    # Local development with SQLite
-    print("✅ Using SQLite database: pos.db")
-    engine = create_engine(
-        "sqlite:///./pos.db",
-        connect_args={"check_same_thread": False}
-    )
+    # Local development - SQLite
+    DATABASE_URL = "sqlite:///pos.db"
+    print(f"✅ Using SQLite database: pos.db")
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
-# Create session and base
+# Create session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Create base
 Base = declarative_base()
-
-
-def get_db():
-    """Get database session"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
