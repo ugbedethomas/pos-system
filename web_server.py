@@ -1,4 +1,4 @@
-﻿# web_server.py
+﻿# web_server.py - CORRECTED VERSION
 from flask import Flask, render_template, jsonify, request, redirect, url_for, session
 from app.database import SessionLocal
 from app import crud, schemas, models
@@ -643,46 +643,81 @@ def api_create_product():
         db.close()
 
 
-@app.route('/products/create', methods=['POST'])
+# PRODUCT CREATE PAGE - COMBINED GET & POST - ONLY ONE FUNCTION!
+@app.route('/products/create', methods=['GET', 'POST'])
 def web_create_product():
+    """Handle both GET (display form) and POST (create product)"""
     if not check_permission('inventory'):
         return "Access Denied", 403
 
     db = SessionLocal()
     try:
-        # Get form data
-        name = request.form.get('name')
-        sku = request.form.get('sku')
-        price = request.form.get('price')
-        barcode = request.form.get('barcode', '').strip() or None
+        # Get categories for dropdown (needed for both GET and error cases)
+        products = crud.get_products(db)
+        categories = list(set(p.category for p in products if p.category))
 
-        if not name or not sku or not price:
-            return redirect('/products?error=Missing+required+fields')
+        if request.method == 'GET':
+            # Display the form
+            return render_template('create_product.html',
+                                   categories=categories,
+                                   company=COMPANY_SETTINGS,
+                                   format_naira=format_naira)
 
-        # Check if barcode already exists
-        if barcode:
-            existing = db.query(models.Product).filter(
-                models.Product.barcode == barcode
-            ).first()
-            if existing:
-                return redirect(f'/products?error=Barcode+{barcode}+already+exists')
+        else:  # POST method - Create product
+            # Get form data
+            name = request.form.get('name')
+            sku = request.form.get('sku')
+            price = request.form.get('price')
+            barcode = request.form.get('barcode', '').strip() or None
 
-        product_data = schemas.ProductCreate(
-            name=name,
-            sku=sku,
-            price=float(price),
-            stock_quantity=int(request.form.get('stock_quantity', 0)),
-            category=request.form.get('category', 'Uncategorized'),
-            description=request.form.get('description', ''),
-            barcode=barcode
-        )
+            if not name or not sku or not price:
+                # Show error on the same page
+                return render_template('create_product.html',
+                                       categories=categories,
+                                       company=COMPANY_SETTINGS,
+                                       format_naira=format_naira,
+                                       error='Missing required fields')
 
-        product = crud.create_product(db, product_data)
-        return redirect('/products?success=Product+added')
+            # Check if barcode already exists
+            if barcode:
+                existing = db.query(models.Product).filter(
+                    models.Product.barcode == barcode
+                ).first()
+                if existing:
+                    return render_template('create_product.html',
+                                           categories=categories,
+                                           company=COMPANY_SETTINGS,
+                                           format_naira=format_naira,
+                                           error=f'Barcode {barcode} already exists')
+
+            # Create product
+            product_data = schemas.ProductCreate(
+                name=name,
+                sku=sku,
+                price=float(price),
+                stock_quantity=int(request.form.get('stock_quantity', 0)),
+                category=request.form.get('category', 'Uncategorized'),
+                description=request.form.get('description', ''),
+                barcode=barcode
+            )
+
+            product = crud.create_product(db, product_data)
+
+            # Redirect to products page with success message
+            return redirect('/products?success=Product+added+successfully')
+
     except ValueError as e:
-        return redirect(f'/products?error={str(e).replace(" ", "+")}')
+        return render_template('create_product.html',
+                               categories=categories,
+                               company=COMPANY_SETTINGS,
+                               format_naira=format_naira,
+                               error=str(e))
     except Exception as e:
-        return redirect(f'/products?error={str(e).replace(" ", "+")}')
+        return render_template('create_product.html',
+                               categories=categories,
+                               company=COMPANY_SETTINGS,
+                               format_naira=format_naira,
+                               error=f'Error: {str(e)}')
     finally:
         db.close()
 

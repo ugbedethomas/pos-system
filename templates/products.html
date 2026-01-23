@@ -1268,5 +1268,19 @@
             });
         }
     });
+
+    // Auto-show add product form if redirected from dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('showAddForm') === 'true') {
+        // Check if the showAddProductForm function exists
+        if (typeof showAddProductForm === 'function') {
+            // Wait a bit for page to load completely
+            setTimeout(() => {
+                showAddProductForm();
+            }, 300);
+        }
+    }
+});
 </script>
 {% endblock %}
